@@ -98,7 +98,7 @@ export default function EmployeeDashboard() {
   const [startLoc, setStartLoc] = useState("");
   const [destLoc, setDestLoc] = useState("");
   const [scheduledEnabled, setScheduledEnabled] = useState(false);
-  const [travelDateTime, setTravelDateTime] = useState(() => new Date(Date.now() + 1800000).toISOString().slice(0, 16));
+  const [travelDateTime, setTravelDateTime] = useState("");
   const [selectedSeats, setSelectedSeats] = useState(1);
 
   /* Offer Ride Inputs */
@@ -106,7 +106,12 @@ export default function EmployeeDashboard() {
   const [offerStartLoc, setOfferStartLoc] = useState("");
   const [offerDestLoc, setOfferDestLoc] = useState("");
   const [offerScheduledEnabled, setOfferScheduledEnabled] = useState(false);
-  const [offerDateTime, setOfferDateTime] = useState(() => new Date(Date.now() + 3600000).toISOString().slice(0, 16));
+  const [offerDateTime, setOfferDateTime] = useState("");
+
+  useEffect(() => {
+    setTravelDateTime(new Date(Date.now() + 1800000).toISOString().slice(0, 16));
+    setOfferDateTime(new Date(Date.now() + 3600000).toISOString().slice(0, 16));
+  }, []);
   const [offerSeatsAvailable, setOfferSeatsAvailable] = useState(3);
   const [offerFarePerSeat, setOfferFarePerSeat] = useState(80);
   const [offerLoading, setOfferLoading] = useState(false);

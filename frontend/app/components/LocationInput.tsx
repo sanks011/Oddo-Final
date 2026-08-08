@@ -137,7 +137,7 @@ export default function LocationInput({
   };
 
   return (
-    <div ref={containerRef} className="flex flex-col gap-1.5 relative w-full">
+    <div ref={containerRef} className="flex flex-col gap-1.5 relative w-full" suppressHydrationWarning>
       <div className="flex justify-between items-center">
         <label htmlFor={id} className="text-xs font-mono font-bold uppercase text-[#173300]">
           {label}
