@@ -72,7 +72,7 @@ class RidesService {
 
   // Lists published ride offers created by caller with active negotiations and join requests
   async getMyOfferedRides(currentUser) {
-    return await prisma.ride.findMany({
+    const rides = await prisma.ride.findMany({
       where: {
         driverId: currentUser.id,
         status: { in: ['SCHEDULED', 'ACTIVE'] },
@@ -97,6 +97,29 @@ class RidesService {
       },
       orderBy: { departureAt: 'desc' },
     });
+
+    const now = Date.now();
+    for (const ride of rides) {
+      if (ride.negotiations && ride.negotiations.length > 0) {
+        const active = [];
+        const departureTime = new Date(ride.departureAt).getTime();
+        const rideCreatedTime = new Date(ride.createdAt).getTime();
+        const isScheduled = ride.isRecurring || (departureTime - rideCreatedTime > 5 * 60 * 1000);
+
+        for (const neg of ride.negotiations) {
+          const createdAt = new Date(neg.createdAt).getTime();
+          const isExpired = isScheduled ? now >= departureTime : now - createdAt > 10 * 60 * 1000;
+          if (isExpired) {
+            await prisma.negotiation.update({ where: { id: neg.id }, data: { status: 'EXPIRED' } });
+          } else {
+            active.push(neg);
+          }
+        }
+        ride.negotiations = active;
+      }
+    }
+
+    return rides;
   }
   async searchRides(currentUser, {
     pickupLat,
