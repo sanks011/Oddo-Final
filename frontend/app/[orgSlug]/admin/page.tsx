@@ -34,22 +34,25 @@ export default function OrgAdminDashboard({
   const [apiPendingUsers, setApiPendingUsers] = useState<UserData[]>([]);
   const [apiEmployees, setApiEmployees] = useState<UserData[]>([]);
   const [apiVehicles, setApiVehicles] = useState<VehicleData[]>([]);
+  const [apiPendingVehicles, setApiPendingVehicles] = useState<VehicleData[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
   const loadData = async () => {
     setDataLoading(true);
     try {
-      const { apiGetPendingUsers, apiListUsers, apiListVehicles, apiGetOrganization } = await import("../../lib/api");
-      const [orgData, pending, emps, vehs] = await Promise.all([
+      const { apiGetPendingUsers, apiListUsers, apiListVehicles, apiGetPendingVehicles, apiGetOrganization } = await import("../../lib/api");
+      const [orgData, pending, emps, vehs, pendingVehs] = await Promise.all([
         apiGetOrganization(orgSlug).catch(() => null),
         apiGetPendingUsers().catch(() => [] as UserData[]),
         apiListUsers().catch(() => [] as UserData[]),
         apiListVehicles(true).catch(() => [] as VehicleData[]),
+        apiGetPendingVehicles().catch(() => [] as VehicleData[]),
       ]);
       if (orgData) setRealOrg(orgData);
       setApiPendingUsers(pending);
       setApiEmployees(emps.filter((u) => u.verificationStatus === "APPROVED"));
       setApiVehicles(vehs);
+      setApiPendingVehicles(pendingVehs);
     } catch {}
     setDataLoading(false);
   };
@@ -108,6 +111,34 @@ export default function OrgAdminDashboard({
         loadData();
       } catch (err: any) {
         alert(err?.message || "Failed to reject user");
+      }
+    }
+  };
+
+  const handleApproveVehicle = async (vehicleId: string) => {
+    try {
+      const { apiApproveVehicle } = await import("../../lib/api");
+      await apiApproveVehicle(vehicleId);
+      setApiPendingVehicles((prev) => prev.filter((v) => v.id !== vehicleId));
+      loadData();
+    } catch (err: any) {
+      alert(err?.message || "Failed to approve vehicle");
+    }
+  };
+
+  const handleRejectVehicle = async (vehicleId: string) => {
+    const reason = prompt(
+      "Enter rejection reason for this vehicle registration:",
+      "Driving license document is blurred or expired."
+    );
+    if (reason !== null) {
+      try {
+        const { apiRejectVehicle } = await import("../../lib/api");
+        await apiRejectVehicle(vehicleId, reason);
+        setApiPendingVehicles((prev) => prev.filter((v) => v.id !== vehicleId));
+        loadData();
+      } catch (err: any) {
+        alert(err?.message || "Failed to reject vehicle");
       }
     }
   };
@@ -611,48 +642,169 @@ export default function OrgAdminDashboard({
                 Registered Vehicles &amp; Drivers
               </h1>
               <p className="text-xs text-[#173300]/60 font-mono mt-1">
-                View vehicles and registered fleet drivers for {org.name}.
+                Verify driver license documents and manage carpool vehicles for {org.name}.
               </p>
             </div>
 
+            {/* Pending Driving License Verifications */}
+            {apiPendingVehicles.length > 0 && (
+              <div className="bg-[#FFEB5B]/30 border-2 border-[#173300] rounded-2xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-[#173300] animate-pulse" />
+                    <h2 className="font-heading text-xl font-extrabold text-[#173300]">
+                      Pending Vehicle &amp; Driving License Verifications ({apiPendingVehicles.length})
+                    </h2>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {apiPendingVehicles.map((veh) => {
+                    const ownerName = veh.owner
+                      ? `${veh.owner.firstName || ""} ${veh.owner.lastName || ""}`.trim()
+                      : "Registered Driver";
+                    return (
+                      <div
+                        key={veh.id}
+                        className="border-2 border-[#173300] bg-[#FCFAF5] rounded-2xl p-5 shadow-[4px_4px_0px_#173300] flex flex-col justify-between gap-4"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">
+                              {veh.fuelType}
+                            </span>
+                            <h3 className="font-heading text-lg font-extrabold text-[#173300] mt-2">
+                              {veh.model}
+                            </h3>
+                            <div className="text-xs font-mono font-bold text-[#173300]/80 mt-0.5">
+                              Plate: {veh.registrationNumber}
+                            </div>
+                            <div className="text-xs text-[#173300]/70 font-mono mt-1">
+                              Driver: <span className="font-bold">{ownerName}</span> ({veh.owner?.email})
+                            </div>
+                          </div>
+
+                          <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border bg-amber-100 text-amber-800 border-amber-300">
+                            ● PENDING REVIEW
+                          </span>
+                        </div>
+
+                        {/* License Thumbnail inspection */}
+                        <div className="bg-[#173300]/[0.03] border-2 border-dashed border-[#B6B6B6] rounded-xl p-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-[#173300]/10 flex items-center justify-center font-mono font-bold text-xs text-[#173300]">
+                              DL
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-[#173300]">
+                                Driving License Document
+                              </div>
+                              <div className="text-[10px] font-mono text-[#173300]/50">
+                                Uploaded by driver
+                              </div>
+                            </div>
+                          </div>
+                          <a
+                            href={getIdProofUrl ? `${API_BASE_URL}/vehicles/${veh.id}/license?token=${encodeURIComponent(typeof window !== 'undefined' && localStorage.getItem('oddo_access_token') || '')}` : '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1 bg-[#173300] text-[#FFEB5B] text-[11px] font-mono font-bold rounded-md hover:opacity-90 inline-block"
+                          >
+                            Inspect License
+                          </a>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-3 pt-1">
+                          <button
+                            onClick={() => handleRejectVehicle(veh.id)}
+                            className="flex-1 py-2.5 rounded-xl border-2 border-dashed border-red-300 text-red-700 font-bold text-xs hover:bg-red-50 transition-colors"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => handleApproveVehicle(veh.id)}
+                            className="flex-2 py-2.5 rounded-xl border-2 border-[#173300] bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                          >
+                            Approve Vehicle
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* All Fleet Vehicles */}
             <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col gap-6">
+              <h2 className="font-heading text-xl font-extrabold text-[#173300]">
+                All Fleet Vehicles ({orgVehs.length})
+              </h2>
+
               {orgVehs.length === 0 ? (
                 <div className="py-12 text-center text-sm font-mono text-[#173300]/50">
                   No registered vehicles found for {org.name} yet.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {orgVehs.map((veh) => (
-                    <div
-                      key={veh.id}
-                      className="border-2 border-[#173300] bg-[#FCFAF5] rounded-2xl p-5 shadow-[4px_4px_0px_#173300] flex flex-col justify-between gap-4"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">
-                            {veh.fuelType}
-                          </span>
-                          <h3 className="font-heading text-lg font-extrabold text-[#173300] mt-2">
-                            {veh.model}
-                          </h3>
-                          <div className="text-xs font-mono font-bold text-[#173300]/80 mt-0.5">
-                            Plate: {veh.registrationNumber}
+                  {orgVehs.map((veh) => {
+                    const ownerName = veh.owner
+                      ? `${veh.owner.firstName || ""} ${veh.owner.lastName || ""}`.trim()
+                      : "Registered Driver";
+                    return (
+                      <div
+                        key={veh.id}
+                        className="border-2 border-[#173300] bg-[#FCFAF5] rounded-2xl p-5 shadow-[4px_4px_0px_#173300] flex flex-col justify-between gap-4"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">
+                              {veh.fuelType}
+                            </span>
+                            <h3 className="font-heading text-lg font-extrabold text-[#173300] mt-2">
+                              {veh.model}
+                            </h3>
+                            <div className="text-xs font-mono font-bold text-[#173300]/80 mt-0.5">
+                              Plate: {veh.registrationNumber}
+                            </div>
+                            <div className="text-xs text-[#173300]/70 font-mono mt-1">
+                              Driver: <span className="font-bold">{ownerName}</span>
+                            </div>
                           </div>
+
+                          <span
+                            className={`text-[10px] font-mono font-bold px-2 py-1 rounded-lg border ${
+                              veh.status === "VERIFIED"
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                : veh.status === "REJECTED"
+                                ? "bg-red-100 text-red-800 border-red-300"
+                                : "bg-amber-100 text-amber-800 border-amber-300"
+                            }`}
+                          >
+                            {veh.status}
+                          </span>
                         </div>
 
-                        <span className="text-[11px] font-mono font-bold px-2 py-1 rounded-lg border border-[#173300] bg-[#FCFAF5]">
-                          {veh.status}
-                        </span>
-                      </div>
-
-                      <div className="bg-[#173300]/[0.03] border border-dashed border-[#B6B6B6] rounded-xl p-3 font-mono text-xs flex justify-between items-center">
-                        <div>
-                          <span className="text-[#173300]/60 block text-[10px]">SEATING CAPACITY</span>
-                          <span className="font-bold text-[#173300]">{veh.seatingCapacity} Seats</span>
+                        <div className="bg-[#173300]/[0.03] border border-dashed border-[#B6B6B6] rounded-xl p-3 font-mono text-xs flex justify-between items-center">
+                          <div>
+                            <span className="text-[#173300]/60 block text-[10px]">SEATING CAPACITY</span>
+                            <span className="font-bold text-[#173300]">{veh.seatingCapacity} Seats</span>
+                          </div>
+                          {veh.licensePath && (
+                            <a
+                              href={`${API_BASE_URL}/vehicles/${veh.id}/license?token=${encodeURIComponent(typeof window !== 'undefined' && localStorage.getItem('oddo_access_token') || '')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[11px] font-bold text-[#173300] underline"
+                            >
+                              Inspect License
+                            </a>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

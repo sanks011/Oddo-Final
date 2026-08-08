@@ -139,6 +139,7 @@ export default function EmployeeDashboard() {
   const [newPlate, setNewPlate] = useState("");
   const [newCap, setNewCap] = useState(4);
   const [newFuel, setNewFuel] = useState("Petrol");
+  const [newLicenseFile, setNewLicenseFile] = useState<File | null>(null);
   const [vehLoading, setVehLoading] = useState(false);
 
   /* Saved place modal */
@@ -170,13 +171,17 @@ export default function EmployeeDashboard() {
 
         if (vehData.status === "fulfilled" && vehData.value.length > 0) {
           const mapped = vehData.value.map(v => ({
-            id: v.id, model: v.model, plateNumber: v.registrationNumber,
+            id: v.id,
+            model: v.model,
+            plateNumber: v.registrationNumber,
             capacity: v.seatingCapacity,
             fuelType: v.fuelType.charAt(0) + v.fuelType.slice(1).toLowerCase(),
-            status: v.status === "VERIFIED" ? "Verified" : "Pending",
+            status: v.status === "VERIFIED" ? "Verified" : v.status === "REJECTED" ? "Rejected" : "Pending",
+            rejectionReason: v.rejectionReason,
           }));
           setVehicles(mapped);
-          setOfferVehId(mapped[0]?.id || "");
+          const firstVerified = mapped.find(v => v.status === "Verified");
+          setOfferVehId(firstVerified?.id || mapped[0]?.id || "");
         }
 
         if (tripData.status === "fulfilled") {
@@ -398,6 +403,11 @@ export default function EmployeeDashboard() {
   const handleOfferFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!offerVehId) { alert("Please select a vehicle first."); return; }
+    const selectedVeh = vehicles.find(v => v.id === offerVehId);
+    if (!selectedVeh || selectedVeh.status !== "Verified") {
+      alert("This vehicle is pending organization admin verification. Only verified vehicles can offer rides.");
+      return;
+    }
     setOfferStep("route-confirm");
   };
 
@@ -503,14 +513,39 @@ export default function EmployeeDashboard() {
   const handleAddVehicleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newModel || !newPlate) return;
+    if (!newLicenseFile) {
+      alert("Please upload your Driving License document to complete vehicle registration.");
+      return;
+    }
     setVehLoading(true);
     try {
       const { apiCreateVehicle } = await import("../lib/api");
-      const created = await apiCreateVehicle({ model: newModel, registrationNumber: newPlate, seatingCapacity: newCap, fuelType: newFuel.toUpperCase() });
-      setVehicles(prev => [...prev, { id: created.id, model: created.model, plateNumber: created.registrationNumber, capacity: created.seatingCapacity, fuelType: newFuel, status: "Pending" }]);
+      const formData = new FormData();
+      formData.append("model", newModel);
+      formData.append("registrationNumber", newPlate);
+      formData.append("seatingCapacity", String(newCap));
+      formData.append("fuelType", newFuel.toUpperCase());
+      formData.append("license", newLicenseFile);
+
+      const created = await apiCreateVehicle(formData);
+      setVehicles(prev => [...prev, {
+        id: created.id,
+        model: created.model,
+        plateNumber: created.registrationNumber,
+        capacity: created.seatingCapacity,
+        fuelType: newFuel,
+        status: "Pending",
+      }]);
       if (!offerVehId) setOfferVehId(created.id);
+      alert("Vehicle registered successfully! It is now under review by your organization admin.");
     } catch (err: any) { alert(err?.message || "Could not register vehicle"); }
-    finally { setVehLoading(false); setNewModel(""); setNewPlate(""); setIsAddVehOpen(false); }
+    finally {
+      setVehLoading(false);
+      setNewModel("");
+      setNewPlate("");
+      setNewLicenseFile(null);
+      setIsAddVehOpen(false);
+    }
   };
 
   const handleAddPlaceSubmit = (e: React.FormEvent) => {
@@ -1064,13 +1099,34 @@ export default function EmployeeDashboard() {
                 {vehicles.map(v => (
                   <div key={v.id} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col justify-between gap-4">
                     <div>
-                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">{v.fuelType}</span>
+                      <div className="flex justify-between items-start">
+                        <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">{v.fuelType}</span>
+                        <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${
+                          v.status === "Verified"
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            : v.status === "Rejected"
+                            ? "bg-red-100 text-red-800 border-red-300"
+                            : "bg-amber-100 text-amber-800 border-amber-300"
+                        }`}>
+                          ● {v.status === "Verified" ? "VERIFIED" : v.status === "Rejected" ? "REJECTED" : "PENDING REVIEW"}
+                        </span>
+                      </div>
                       <h3 className="font-heading text-2xl font-extrabold text-[#173300] mt-2">{v.model}</h3>
                       <div className="text-xs font-mono font-bold text-[#173300]/80 mt-0.5">Plate: {v.plateNumber}</div>
                     </div>
-                    <div className="bg-[#173300]/[0.04] border border-dashed border-[#B6B6B6] rounded-xl p-3 font-mono text-xs flex justify-between">
+
+                    {(v as any).rejectionReason && (
+                      <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs font-mono text-red-800">
+                        <strong className="block text-[10px] uppercase text-red-600">Rejection Reason:</strong>
+                        {(v as any).rejectionReason}
+                      </div>
+                    )}
+
+                    <div className="bg-[#173300]/[0.04] border border-dashed border-[#B6B6B6] rounded-xl p-3 font-mono text-xs flex justify-between items-center">
                       <span>Capacity: {v.capacity} Seats</span>
-                      <span className={`font-bold ${v.status === "Verified" ? "text-emerald-700" : "text-amber-700"}`}>● {v.status}</span>
+                      <span className="text-[#173300]/60 text-[10px]">
+                        {v.status === "Verified" ? "Ready for Carpooling" : "Driving License Under Review"}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -1291,6 +1347,11 @@ export default function EmployeeDashboard() {
                 <select value={newFuel} onChange={e => setNewFuel(e.target.value)} className="w-full px-3.5 py-2.5 rounded-xl border-2 border-dashed border-[#B6B6B6] text-sm font-mono outline-none">
                   {["Petrol","Diesel","Electric","Hybrid"].map(f => <option key={f}>{f}</option>)}
                 </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-mono font-bold uppercase text-[#173300]">Driving License Document (PNG, JPG, PDF)</label>
+                <input type="file" accept="image/*,.pdf" onChange={e => setNewLicenseFile(e.target.files?.[0] || null)} required className="w-full px-3 py-2 rounded-xl border-2 border-dashed border-[#B6B6B6] text-xs font-mono bg-white outline-none" />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setIsAddVehOpen(false)} className="flex-1 py-2.5 rounded-xl border-2 border-dashed border-[#B6B6B6] text-xs font-semibold">Cancel</button>

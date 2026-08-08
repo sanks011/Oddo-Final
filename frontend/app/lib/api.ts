@@ -310,24 +310,58 @@ export interface VehicleData {
   seatingCapacity: number;
   fuelType: "PETROL" | "DIESEL" | "ELECTRIC" | "HYBRID";
   status: "VERIFIED" | "PENDING" | "REJECTED";
+  licensePath?: string;
+  rejectionReason?: string;
   ownerId?: string;
+  owner?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    orgId?: string;
+  };
 }
 
 export async function apiListVehicles(includeOrg = true): Promise<VehicleData[]> {
-  const query = includeOrg ? "?includeOrg=true" : "";
+  const query = includeOrg ? "?all=true" : "";
   return fetchApi<VehicleData[]>(`/vehicles${query}`);
 }
 
-export async function apiCreateVehicle(payload: {
-  model: string;
-  registrationNumber: string;
-  seatingCapacity: number;
-  fuelType: string;
-}): Promise<VehicleData> {
-  return fetchApi<VehicleData>("/vehicles", {
+export async function apiGetPendingVehicles(): Promise<VehicleData[]> {
+  return fetchApi<VehicleData[]>("/vehicles/pending");
+}
+
+export async function apiCreateVehicle(formData: FormData): Promise<VehicleData> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/vehicles`, {
     method: "POST",
-    body: JSON.stringify(payload),
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
   });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to register vehicle");
+  }
+  return data;
+}
+
+export async function apiApproveVehicle(vehicleId: string): Promise<{ message: string; vehicle: VehicleData }> {
+  return fetchApi<{ message: string; vehicle: VehicleData }>(`/vehicles/${vehicleId}/approve`, {
+    method: "PATCH",
+  });
+}
+
+export async function apiRejectVehicle(vehicleId: string, rejectionReason: string): Promise<{ message: string; vehicle: VehicleData }> {
+  return fetchApi<{ message: string; vehicle: VehicleData }>(`/vehicles/${vehicleId}/reject`, {
+    method: "PATCH",
+    body: JSON.stringify({ rejectionReason }),
+  });
+}
+
+export function getVehicleLicenseUrl(vehicleId: string): string {
+  const token = getAccessToken();
+  return `${API_BASE_URL}/vehicles/${vehicleId}/license${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 }
 
 export async function apiUpdateVehicle(
