@@ -10,15 +10,11 @@ import { useAuth } from "../context/AuthContext";
 type Tab = "signin" | "signup";
 type SignupStep = 1 | 2 | 3;
 
-const ORGANISATIONS = [
-  "Acme Corp",
-  "NovaTech Industries",
-  "Skyline Ventures",
-  "Atlas Logistics",
-  "Meridian Labs",
-  "Evergreen Holdings",
-  "Other",
-];
+interface OrgOption {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 /* ── Tiny helpers ───────────────────────────────────── */
 function InputField({
@@ -65,12 +61,14 @@ function SelectField({
   value,
   onChange,
   options,
+  loading = false,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (v: string) => void;
-  options: string[];
+  options: OrgOption[];
+  loading?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -88,11 +86,11 @@ function SelectField({
           className="w-full appearance-none px-4 py-2.5 rounded-xl border-2 border-dashed border-[#B6B6B6] bg-[#FCFAF5] text-[#173300] text-sm font-medium outline-none focus:border-[#173300] transition-colors duration-200 cursor-pointer"
         >
           <option value="" disabled>
-            Select your account…
+            {loading ? "Loading organisations from server…" : options.length === 0 ? "No active organisations available" : "Select your organisation…"}
           </option>
           {options.map((o) => (
-            <option key={o} value={o}>
-              {o}
+            <option key={o.id} value={o.id}>
+              {o.name}
             </option>
           ))}
         </select>
@@ -136,6 +134,25 @@ function LoginContent() {
   const [tab, setTab] = useState<Tab>("signin");
   const [signupStep, setSignupStep] = useState<SignupStep>(1);
 
+  /* Dynamic Organizations list from backend */
+  const [publicOrgs, setPublicOrgs] = useState<OrgOption[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(true);
+
+  useEffect(() => {
+    import("../lib/api").then(({ apiListPublicOrganizations }) => {
+      apiListPublicOrganizations()
+        .then((orgs) => {
+          if (Array.isArray(orgs)) {
+            setPublicOrgs(orgs);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setOrgsLoading(false);
+        });
+    });
+  }, []);
+
   /* Sign In state */
   const [siEmail, setSiEmail] = useState("");
   const [siPassword, setSiPassword] = useState("");
@@ -143,7 +160,7 @@ function LoginContent() {
   const [siLoading, setSiLoading] = useState(false);
 
   /* Sign Up step-1 state */
-  const [suOrg, setSuOrg] = useState("");
+  const [suOrgId, setSuOrgId] = useState("");
   const [suFirstName, setSuFirstName] = useState("");
   const [suLastName, setSuLastName] = useState("");
   const [suPhone, setSuPhone] = useState("");
@@ -201,7 +218,7 @@ function LoginContent() {
   const handleSignUpStep1 = (e: React.FormEvent) => {
     e.preventDefault();
     setSuError("");
-    if (!suOrg) return setSuError("Please select your organisation.");
+    if (!suOrgId) return setSuError("Please select your organisation.");
     if (!suFirstName.trim() || !suLastName.trim())
       return setSuError("Please enter your First and Last name.");
     if (!suPhone.trim())
@@ -240,23 +257,23 @@ function LoginContent() {
 
     try {
       const { apiRegisterUser, apiUploadIdProof } = await import("../lib/api");
-      // Map Org name to slug ID
-      const orgSlug = suOrg.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const regRes = await apiRegisterUser({
         email: suEmail,
         password: suPassword,
         firstName: suFirstName,
         lastName: suLastName,
         phone: suPhone,
-        orgId: orgSlug,
+        orgId: suOrgId,
         employeeId: employeeId || undefined,
       });
 
       if (regRes.pendingToken && idFile) {
         await apiUploadIdProof(regRes.pendingToken, idFile);
       }
-    } catch {
-      // Graceful fallback for local mock state
+    } catch (err: any) {
+      setSuError(err?.message || "Failed to submit registration. Please try again.");
+      setSuLoading(false);
+      return;
     }
 
     setSuLoading(false);
@@ -365,9 +382,10 @@ function LoginContent() {
               <SelectField
                 id="su-org"
                 label="Organisation"
-                value={suOrg}
-                onChange={setSuOrg}
-                options={ORGANISATIONS}
+                value={suOrgId}
+                onChange={setSuOrgId}
+                options={publicOrgs}
+                loading={orgsLoading}
               />
 
               <div className="grid grid-cols-2 gap-3">
@@ -556,9 +574,10 @@ function LoginContent() {
                 <button
                   id="signup-step2-submit"
                   type="submit"
-                  className="flex-[2] py-3.5 px-6 rounded-xl bg-[#173300] text-[#FFEB5B] font-semibold text-base border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:shadow-[2px_2px_0px_#173300] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px] transition-all duration-150"
+                  disabled={suLoading}
+                  className="flex-[2] py-3.5 px-6 rounded-xl bg-[#173300] text-[#FFEB5B] font-semibold text-base border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:shadow-[2px_2px_0px_#173300] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px] transition-all duration-150 disabled:opacity-60"
                 >
-                  Confirm &amp; Submit →
+                  {suLoading ? "Submitting Application…" : "Confirm & Submit →"}
                 </button>
               </div>
             </form>

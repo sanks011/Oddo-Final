@@ -156,8 +156,16 @@ export interface OrgData {
   _count?: { users: number };
 }
 
+export async function apiListPublicOrganizations(): Promise<Array<{ id: string; name: string; slug: string }>> {
+  return fetchApi<Array<{ id: string; name: string; slug: string }>>("/orgs/public");
+}
+
 export async function apiListOrganizations(): Promise<OrgData[]> {
   return fetchApi<OrgData[]>("/orgs");
+}
+
+export async function apiGetOrganization(orgId: string): Promise<OrgData> {
+  return fetchApi<OrgData>(`/orgs/${orgId}`);
 }
 
 export async function apiCreateOrganization(payload: {
@@ -199,9 +207,9 @@ export async function apiProvisionOrgAdmin(
   payload: {
     email: string;
     password: string;
-    firstName: string;
-    lastName: string;
-    phone: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
   }
 ) {
   return fetchApi<{ id: string; email: string; role: string }>(
@@ -309,8 +317,9 @@ export interface VehicleData {
   ownerId?: string;
 }
 
-export async function apiListVehicles(): Promise<VehicleData[]> {
-  return fetchApi<VehicleData[]>("/vehicles");
+export async function apiListVehicles(includeOrg = true): Promise<VehicleData[]> {
+  const query = includeOrg ? "?includeOrg=true" : "";
+  return fetchApi<VehicleData[]>(`/vehicles${query}`);
 }
 
 export async function apiCreateVehicle(payload: {

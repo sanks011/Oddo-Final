@@ -57,10 +57,10 @@ export interface Vehicle {
 
 export interface OrgConfig {
   orgSlug: string;
-  fuelCostPerKm: number; // e.g. 0.18 $/km
-  baseRideCharge: number; // e.g. 2.50 $
-  subsidyPercent: number; // e.g. 50%
-  maxRidersPerCarpool: number; // e.g. 4
+  fuelCostPerKm: number;
+  baseRideCharge: number;
+  subsidyPercent: number;
+  maxRidersPerCarpool: number;
   autoMatchEnabled: boolean;
   departmentRestriction: boolean;
   driverPriorityScore: boolean;
@@ -84,175 +84,13 @@ interface AppContextValue {
   updateOrgConfig: (orgSlug: string, updates: Partial<OrgConfig>) => void;
 }
 
-/* ── Pre-seeded Mock Data ───────────────────────────── */
+/* ── Initial Clean Arrays (No Mock / Dummy Data) ───── */
 
 const INITIAL_ORGS: Organization[] = [];
-
-const INITIAL_APPLICATIONS: PendingApplication[] = [
-  {
-    id: "app-101",
-    orgSlug: "acme-corp",
-    orgName: "Acme Corp",
-    fullName: "Elena Rostova",
-    email: "elena.r@acme.com",
-    employeeId: "EMP-4091",
-    idCardUrl: "/hero-sketch.png",
-    department: "Hardware Engineering",
-    submittedAt: "2 hours ago",
-    status: "pending",
-  },
-  {
-    id: "app-102",
-    orgSlug: "acme-corp",
-    orgName: "Acme Corp",
-    fullName: "Marcus Vance",
-    email: "marcus.v@acme.com",
-    employeeId: "EMP-4092",
-    idCardUrl: "/client.png",
-    department: "Operations & Logistics",
-    submittedAt: "5 hours ago",
-    status: "pending",
-  },
-  {
-    id: "app-103",
-    orgSlug: "novatech-industries",
-    orgName: "NovaTech Industries",
-    fullName: "Sophia Lin",
-    email: "sophia.l@novatech.io",
-    employeeId: "NT-8812",
-    idCardUrl: "/meeting.png",
-    department: "R&D",
-    submittedAt: "1 day ago",
-    status: "pending",
-  },
-];
-
-const INITIAL_EMPLOYEES: Employee[] = [
-  {
-    id: "emp-1",
-    orgSlug: "acme-corp",
-    employeeId: "EMP-1001",
-    name: "David Chen",
-    email: "david.c@acme.com",
-    department: "Engineering",
-    role: "Senior Embedded Engineer",
-    carpoolAccess: true,
-    status: "Active",
-    joinedDate: "2024-03-12",
-    totalRides: 34,
-  },
-  {
-    id: "emp-2",
-    orgSlug: "acme-corp",
-    employeeId: "EMP-1002",
-    name: "Sarah Jenkins",
-    email: "sarah.j@acme.com",
-    department: "Product Design",
-    role: "Lead UI Designer",
-    carpoolAccess: true,
-    status: "Active",
-    joinedDate: "2024-05-19",
-    totalRides: 28,
-  },
-  {
-    id: "emp-3",
-    orgSlug: "acme-corp",
-    employeeId: "EMP-1003",
-    name: "Michael Chang",
-    email: "michael.c@acme.com",
-    department: "Supply Chain",
-    role: "Inventory Analyst",
-    carpoolAccess: false,
-    status: "Pending Verification",
-    joinedDate: "2026-07-01",
-    totalRides: 0,
-  },
-  {
-    id: "emp-4",
-    orgSlug: "novatech-industries",
-    employeeId: "NT-101",
-    name: "James Wilson",
-    email: "james.w@novatech.io",
-    department: "AI Research",
-    role: "Principal Scientist",
-    carpoolAccess: true,
-    status: "Active",
-    joinedDate: "2025-01-10",
-    totalRides: 42,
-  },
-];
-
-const INITIAL_VEHICLES: Vehicle[] = [
-  {
-    id: "veh-1",
-    orgSlug: "acme-corp",
-    plateNumber: "CA 8XYZ94",
-    model: "Tesla Model Y (White)",
-    driverName: "David Chen",
-    driverEmployeeId: "EMP-1001",
-    seatsAvailable: 3,
-    fuelType: "Electric",
-    verificationStatus: "Verified",
-  },
-  {
-    id: "veh-2",
-    orgSlug: "acme-corp",
-    plateNumber: "CA 4LMN22",
-    model: "Toyota RAV4 Hybrid (Silver)",
-    driverName: "Sarah Jenkins",
-    driverEmployeeId: "EMP-1002",
-    seatsAvailable: 4,
-    fuelType: "Hybrid",
-    verificationStatus: "Verified",
-  },
-  {
-    id: "veh-3",
-    orgSlug: "novatech-industries",
-    plateNumber: "NY K90-221",
-    model: "Honda Civic Sedan (Blue)",
-    driverName: "James Wilson",
-    driverEmployeeId: "NT-101",
-    seatsAvailable: 3,
-    fuelType: "Petrol",
-    verificationStatus: "Pending Inspection",
-  },
-];
-
-const DEFAULT_CONFIGS: Record<string, OrgConfig> = {
-  "acme-corp": {
-    orgSlug: "acme-corp",
-    fuelCostPerKm: 0.18,
-    baseRideCharge: 2.5,
-    subsidyPercent: 50,
-    maxRidersPerCarpool: 4,
-    autoMatchEnabled: true,
-    departmentRestriction: false,
-    driverPriorityScore: true,
-    carpoolEnabledGlobally: true,
-  },
-  "novatech-industries": {
-    orgSlug: "novatech-industries",
-    fuelCostPerKm: 0.22,
-    baseRideCharge: 3.0,
-    subsidyPercent: 40,
-    maxRidersPerCarpool: 3,
-    autoMatchEnabled: true,
-    departmentRestriction: true,
-    driverPriorityScore: false,
-    carpoolEnabledGlobally: true,
-  },
-  "skyline-ventures": {
-    orgSlug: "skyline-ventures",
-    fuelCostPerKm: 0.2,
-    baseRideCharge: 2.0,
-    subsidyPercent: 60,
-    maxRidersPerCarpool: 4,
-    autoMatchEnabled: false,
-    departmentRestriction: false,
-    driverPriorityScore: true,
-    carpoolEnabledGlobally: true,
-  },
-};
+const INITIAL_APPLICATIONS: PendingApplication[] = [];
+const INITIAL_EMPLOYEES: Employee[] = [];
+const INITIAL_VEHICLES: Vehicle[] = [];
+const DEFAULT_CONFIGS: Record<string, OrgConfig> = {};
 
 /* ── Context Creation ──────────────────────────────── */
 
