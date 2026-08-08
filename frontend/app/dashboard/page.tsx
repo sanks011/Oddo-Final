@@ -705,7 +705,7 @@ export default function EmployeeDashboard() {
   const activeTrips = trips.filter(isActiveTrip);
 
   return (
-    <div className="min-h-screen bg-[#FCFAF5] text-[#173300] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#FCFAF5] text-[#173300] flex flex-col font-sans" suppressHydrationWarning>
       {/* ── Header ── */}
       <header className="border-b-2 border-[#173300] bg-[#FCFAF5] sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-6">
