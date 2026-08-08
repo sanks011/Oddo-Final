@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Navbar from "../components/Navbar";
 
 interface InventoryItem {
@@ -169,6 +170,18 @@ const initialLogs: ActivityLog[] = [
 ];
 
 export default function Dashboard() {
+  const router = useRouter();
+
+  // Client-side auth guard (fallback for edge middleware)
+  useEffect(() => {
+    const hasToken = document.cookie
+      .split("; ")
+      .some((row) => row.startsWith("auth-token="));
+    if (!hasToken) {
+      router.replace("/login?from=/dashboard");
+    }
+  }, [router]);
+
   const [items, setItems] = useState<InventoryItem[]>(initialInventory);
   const [logs, setLogs] = useState<ActivityLog[]>(initialLogs);
   const [searchQuery, setSearchQuery] = useState("");
