@@ -112,7 +112,7 @@ export default function WorkflowSection() {
               </p>
             </div>
             <img
-              src="/inbox-client.svg"
+              src="/inbox-client.png"
               alt="Ride booking interface"
               width="741"
               height="127"
