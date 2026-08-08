@@ -198,20 +198,21 @@ export default function EmployeeDashboard() {
 
         // Also sync active passenger bargain item
         setActivePassengerBargains(prev => {
-          const idx = prev.findIndex(b => b.rideId === rideId);
-          if (idx >= 0) {
-            const copy = [...prev];
-            copy[idx] = {
-              ...copy[idx],
-              negotiationId: neg.id,
-              currentOffer: latestAmt || copy[idx].currentOffer,
-              lastOfferedBy: lastBy,
-              status: neg.status === "ACCEPTED" ? "accepted" : neg.status === "REJECTED" ? "rejected" : "pending",
-              updatedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            };
-            return copy;
+          const rest = prev.filter(b => b.rideId !== rideId);
+          if (neg.status === "ACCEPTED" || neg.status === "REJECTED") {
+            return rest;
           }
-          return prev;
+          const existing = prev.find(b => b.rideId === rideId);
+          const updatedItem = existing ? {
+            ...existing,
+            negotiationId: neg.id,
+            currentOffer: latestAmt || existing.currentOffer,
+            lastOfferedBy: lastBy,
+            status: "pending" as const,
+            updatedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          } : null;
+
+          return updatedItem ? [...rest, updatedItem] : rest;
         });
 
         if (showToastOnSuccess) {
