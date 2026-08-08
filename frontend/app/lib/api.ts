@@ -836,10 +836,10 @@ export async function apiRejectNegotiation(
    MODULE 16 — OTP
    ════════════════════════════════════════════════════ */
 
-export async function apiVerifyOtp(tripId: string, otp: string) {
+export async function apiVerifyOtp(tripId: string, otp: string, passengerId?: string) {
   return fetchApi<{ message: string; trip: { id: string; status: string } }>(
     `/trips/${tripId}/otp/verify`,
-    { method: "POST", body: JSON.stringify({ otp }) }
+    { method: "POST", body: JSON.stringify({ otp, passengerId }) }
   );
 }
 

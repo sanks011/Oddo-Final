@@ -46,12 +46,15 @@ interface AvailableRide {
 interface Trip {
   id: string; rideId?: string; role: "PASSENGER" | "DRIVER";
   driverName: string; driverPhone: string; driverId?: string;
-  passengers: string[]; vehicleModel: string; plateNumber: string;
+  passengers: string[];
+  passengersList?: Array<{ id: string; firstName: string; lastName: string; phone?: string; seatsBooked: number; fareAmount: number; otp?: string }>;
+  vehicleModel: string; plateNumber: string;
   pickupLabel: string; pickupLat?: number; pickupLng?: number;
   destinationLabel: string; destinationLat?: number; destinationLng?: number;
   departureTime: string; seatsBooked: number; fareAmount: number;
   status: string; distanceKm: number; durationMins: number;
   routeGeometry?: string;
+  otp?: string;
 }
 
 interface NegotiationState {
@@ -157,6 +160,7 @@ export default function EmployeeDashboard() {
   const [bargainAmount, setBargainAmount] = useState(0);
   const [activePassengerBargains, setActivePassengerBargains] = useState<ActivePassengerBargain[]>([]);
   const [isRefreshingNeg, setIsRefreshingNeg] = useState(false);
+  const [driverOtpInputs, setDriverOtpInputs] = useState<Record<string, string>>({});
 
   const refreshNegotiationData = useCallback(async (rideId: string, showToastOnSuccess = false) => {
     setIsRefreshingNeg(true);
@@ -388,6 +392,7 @@ export default function EmployeeDashboard() {
       driverPhone: t.driver?.phone || "",
       driverId: t.driver?.id,
       passengers: (t.passengers || []).map((p: any) => `${p.firstName} ${p.lastName}`),
+      passengersList: t.passengers || [],
       vehicleModel: t.ride?.vehicle?.model || "Vehicle",
       plateNumber: t.ride?.vehicle?.registrationNumber || "",
       pickupLabel: t.ride?.pickupLabel || "",
@@ -403,6 +408,7 @@ export default function EmployeeDashboard() {
       distanceKm: t.ride?.routeDistanceKm || 0,
       durationMins: t.ride?.routeDurationMinutes || 0,
       routeGeometry: t.ride?.routeGeometry,
+      otp: t.otp || "",
     };
   }
 
@@ -771,6 +777,30 @@ export default function EmployeeDashboard() {
       showToast("OTP verified! Ride in progress. 🚗", "success");
     } catch (err: any) {
       setOtpError(err?.message || "Invalid OTP");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  /* ── OTP: Driver verifies passenger ── */
+  const handleDriverVerifyPassengerOtp = async (trip: Trip, passengerId?: string) => {
+    const inputKey = passengerId ? `${trip.id}:${passengerId}` : trip.id;
+    const otpVal = driverOtpInputs[inputKey] || otpInput;
+    if (!otpVal || !otpVal.trim()) {
+      showToast("Please enter the passenger's 4-digit boarding OTP.", "warning");
+      return;
+    }
+    setOtpLoading(true);
+    try {
+      const { apiVerifyOtp, apiGetMyTrips } = await import("../lib/api");
+      await apiVerifyOtp(trip.id, otpVal.trim(), passengerId);
+      setDriverOtpInputs(prev => ({ ...prev, [inputKey]: "" }));
+      setTrackingTripId(trip.id);
+      const fresh = await apiGetMyTrips();
+      setTrips(fresh.map(mapTrip));
+      showToast("OTP verified! Ride has started! 🚗", "success");
+    } catch (err: any) {
+      showToast(err?.message || "Invalid OTP", "error");
     } finally {
       setOtpLoading(false);
     }
@@ -1507,10 +1537,18 @@ export default function EmployeeDashboard() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-heading text-xl font-extrabold text-[#173300]">{trip.role === "DRIVER" ? "Your Ride" : trip.driverName}</h3>
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-[#173300]/10 rounded-lg">{trip.role}</span>
+                          <h3 className="font-heading text-xl font-extrabold text-[#173300]">
+                            {trip.role === "DRIVER" ? "Your Offered Ride" : `Driver: ${trip.driverName}`}
+                          </h3>
+                          <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-lg ${
+                            trip.role === "DRIVER"
+                              ? "bg-[#173300] text-[#FFEB5B]"
+                              : "bg-amber-100 text-amber-900 border border-amber-300"
+                          }`}>
+                            {trip.role === "DRIVER" ? "YOU ARE DRIVER" : "YOU ARE PASSENGER"}
+                          </span>
                         </div>
-                        <div className="text-xs font-mono text-[#173300]/70">{trip.pickupLabel} to {trip.destinationLabel}</div>
+                        <div className="text-xs font-mono text-[#173300]/70 mt-0.5">{trip.pickupLabel} to {trip.destinationLabel}</div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -1543,46 +1581,63 @@ export default function EmployeeDashboard() {
                     </div>
                   )}
 
-                  {/* OTP display for passenger (received via socket) */}
-                  {trip.role === "PASSENGER" && otpDisplay && trackingTripId === trip.id && (
-                    <div className="bg-[#FFEB5B] border-2 border-[#173300] rounded-2xl p-4 text-center">
-                      <div className="text-xs font-mono font-bold text-[#173300]/70 mb-1">Your OTP — Share with driver</div>
-                      <div className="font-heading text-5xl font-extrabold text-[#173300] tracking-widest">{otpDisplay}</div>
-                    </div>
-                  )}
-
-                  {/* Driver: start ride → generates OTP */}
-                  {trip.role === "DRIVER" && trip.status === "SCHEDULED" && (
-                    <div className="flex flex-col gap-3">
-                      {otpDisplay && activeOtpTrip?.id === trip.id ? (
-                        <div className="bg-[#FFEB5B] border-2 border-[#173300] rounded-2xl p-4 text-center">
-                          <div className="text-xs font-mono font-bold text-[#173300]/70 mb-1">OTP for Passenger</div>
-                          <div className="font-heading text-5xl font-extrabold text-[#173300] tracking-widest">{otpDisplay}</div>
-                          <div className="text-xs font-mono text-[#173300]/60 mt-2">Ask passenger to confirm with this OTP</div>
-                        </div>
-                      ) : (
-                        <button onClick={() => handleDriverStartRide(trip)} disabled={otpLoading}
-                          className="w-full py-3.5 rounded-2xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-base border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-60">
-                          {otpLoading ? "Generating OTP…" : "Start Ride — Generate OTP"}
-                        </button>
-                      )}
-                      {otpError && <p className="text-red-600 text-xs font-semibold text-center">{otpError}</p>}
-                    </div>
-                  )}
-
-                  {/* Passenger: enter OTP to start ride */}
-                  {trip.role === "PASSENGER" && trip.status === "SCHEDULED" && !otpDisplay && (
-                    <div className="flex flex-col gap-3">
-                      <div className="text-xs font-mono text-[#173300]/60">Waiting for driver to start. Enter OTP when driver arrives:</div>
-                      <div className="flex gap-2">
-                        <input value={otpInput} onChange={e => setOtpInput(e.target.value)} placeholder="4-digit OTP" maxLength={4}
-                          className="flex-1 px-4 py-2.5 rounded-xl border-2 border-dashed border-[#B6B6B6] bg-[#FCFAF5] text-center font-heading text-2xl font-extrabold tracking-widest text-[#173300] outline-none focus:border-[#173300]" />
-                        <button onClick={() => handleVerifyOtp(trip)} disabled={otpLoading}
-                          className="px-5 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] disabled:opacity-60">
-                          {otpLoading ? "…" : "Verify"}
-                        </button>
+                  {/* PASSENGER: Display 4-digit verification OTP */}
+                  {trip.role === "PASSENGER" && (trip.status === "SCHEDULED" || trip.status === "RIDE_BOOKED") && (
+                    <div className="bg-[#FFEB5B] border-2 border-[#173300] rounded-2xl p-5 text-center shadow-[4px_4px_0px_#173300]">
+                      <div className="text-xs font-mono font-bold uppercase tracking-wider text-[#173300]/80 mb-1">
+                        Your Ride Verification OTP
                       </div>
-                      {otpError && <p className="text-red-600 text-xs font-semibold">{otpError}</p>}
+                      <div className="font-heading text-5xl font-extrabold text-[#173300] tracking-widest my-1">
+                        {trip.otp || "----"}
+                      </div>
+                      <p className="text-xs font-mono text-[#173300]/80 mt-1">
+                        Share this 4-digit PIN with your driver ({trip.driverName}) when boarding to start your ride.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* DRIVER: Enter passenger's 4-digit OTP to verify & start ride */}
+                  {trip.role === "DRIVER" && (trip.status === "SCHEDULED" || trip.status === "RIDE_BOOKED") && (
+                    <div className="bg-[#173300]/[0.03] border-2 border-[#173300] rounded-2xl p-5 flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-heading text-base font-extrabold text-[#173300]">
+                          🔑 Passenger Boarding & OTP Verification
+                        </h4>
+                        <span className="text-[10px] font-mono font-bold bg-[#FFEB5B] border border-[#173300] text-[#173300] px-2.5 py-0.5 rounded-lg shadow-[1px_1px_0px_#173300]">
+                          Ask Passenger for OTP
+                        </span>
+                      </div>
+                      <div className="space-y-3">
+                        {(trip.passengersList && trip.passengersList.length > 0 ? trip.passengersList : [{ id: "", firstName: "Passenger", lastName: "", phone: "", seatsBooked: trip.seatsBooked, fareAmount: trip.fareAmount }]).map((p: any, idx: number) => (
+                          <div key={p.id || idx} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[2px_2px_0px_#173300]">
+                            <div>
+                              <div className="font-heading font-extrabold text-base text-[#173300]">
+                                {p.firstName} {p.lastName}
+                              </div>
+                              <div className="text-xs font-mono text-[#173300]/70 mt-0.5">
+                                {p.phone ? `Phone: ${p.phone} · ` : ""}{p.seatsBooked || 1} seat(s) · ₹{p.fareAmount || trip.fareAmount}
+                              </div>
+                            </div>
+                            <form onSubmit={(e) => { e.preventDefault(); handleDriverVerifyPassengerOtp(trip, p.id); }} className="flex items-center gap-2 w-full sm:w-auto">
+                              <input
+                                type="text"
+                                maxLength={4}
+                                placeholder="4-digit OTP"
+                                value={driverOtpInputs[`${trip.id}:${p.id}`] || ""}
+                                onChange={(e) => setDriverOtpInputs(prev => ({ ...prev, [`${trip.id}:${p.id}`]: e.target.value }))}
+                                className="w-32 px-3 py-2 rounded-xl border-2 border-[#173300] text-center font-mono font-bold text-sm bg-white focus:outline-none focus:bg-[#FFEB5B]/30"
+                              />
+                              <button
+                                type="submit"
+                                disabled={otpLoading}
+                                className="px-4 py-2 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300] hover:bg-[#173300]/90 disabled:opacity-50 whitespace-nowrap"
+                              >
+                                Verify OTP & Start
+                              </button>
+                            </form>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
