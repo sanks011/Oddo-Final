@@ -49,7 +49,7 @@ class RidesService {
         availableSeats,
         farePerSeat,
         isRecurring,
-        status: 'PUBLISHED',
+        status: 'SCHEDULED',
         routeGeometry: routeInfo.routeGeometry,
         routeDistanceKm: routeInfo.distanceKm,
         routeDurationMinutes: routeInfo.durationMinutes,
@@ -77,7 +77,7 @@ class RidesService {
   }) {
     const where = {
       orgId: currentUser.orgId,
-      status: 'PUBLISHED',
+      status: { in: ['SCHEDULED', 'ACTIVE'] },
       availableSeats: { gte: seatsNeeded },
     };
 
@@ -181,7 +181,7 @@ class RidesService {
     const candidateRides = await prisma.ride.findMany({
       where: {
         orgId: currentUser.orgId,
-        status: 'PUBLISHED',
+        status: { in: ['SCHEDULED', 'ACTIVE'] },
         pickupLat: { gte: pickupLat - latDelta, lte: pickupLat + latDelta },
         pickupLng: { gte: pickupLng - lngDelta, lte: pickupLng + lngDelta },
       },
@@ -242,7 +242,7 @@ class RidesService {
       throw error;
     }
 
-    if (ride.status !== 'PUBLISHED') {
+    if (ride.status !== 'SCHEDULED' && ride.status !== 'ACTIVE') {
       const error = new Error('Ride is no longer accepting join requests');
       error.statusCode = 400;
       throw error;
@@ -386,7 +386,7 @@ class RidesService {
       }
 
       const newSeats = currentRide.availableSeats - request.seatsRequested;
-      const newRideStatus = newSeats === 0 ? 'FULL' : currentRide.status;
+      const newRideStatus = newSeats === 0 ? 'ACTIVE' : currentRide.status;
 
       // 1. Update ride available seats and status
       await tx.ride.update({

@@ -531,7 +531,7 @@ export async function apiGetTrip(tripId: string): Promise<TripData> {
 export async function apiUpdateTripStatus(
   tripId: string,
   status: string
-): Promise<{ message: string; trip: { id: string; status: string } }> {
+): Promise<{ message: string; otp?: string | null; trip: { id: string; status: string } }> {
   return fetchApi(`/trips/${tripId}/status`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
@@ -672,3 +672,109 @@ export async function apiGetVehicleCostReport() {
     }>
   >("/reports/vehicle-cost");
 }
+
+/* ════════════════════════════════════════════════════
+   MODULE 13 — GEOCODING (Next.js internal route)
+   ════════════════════════════════════════════════════ */
+
+export async function apiGeocodeAddress(
+  address: string
+): Promise<{ lat: number; lng: number; formatted_address?: string }> {
+  const res = await fetch(
+    `/api/places/geocode?address=${encodeURIComponent(address)}`
+  );
+  const data = await res.json();
+  if (!res.ok || !data.lat) {
+    throw new Error(data.error || "Geocoding failed");
+  }
+  return data;
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 14 — NEARBY RIDES (by lat/lng radius)
+   ════════════════════════════════════════════════════ */
+
+export async function apiGetNearbyRides(
+  pickupLat: number,
+  pickupLng: number,
+  radiusKm = 1.0
+) {
+  return fetchApi<any[]>(
+    `/rides/nearby-drivers?lat=${pickupLat}&lng=${pickupLng}&radius=${radiusKm}`
+  );
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 15 — NEGOTIATIONS
+   ════════════════════════════════════════════════════ */
+
+export interface NegotiationData {
+  id: string;
+  rideId: string;
+  passengerId: string;
+  status: "OPEN" | "ACCEPTED" | "REJECTED";
+  offers: Array<{
+    id: string;
+    offeredBy: "PASSENGER" | "DRIVER";
+    amount: number;
+    createdAt: string;
+  }>;
+}
+
+export async function apiStartNegotiation(rideId: string, amount: number) {
+  return fetchApi<NegotiationData>(`/rides/${rideId}/negotiations`, {
+    method: "POST",
+    body: JSON.stringify({ amount }),
+  });
+}
+
+export async function apiGetNegotiations(rideId: string) {
+  return fetchApi<NegotiationData[]>(`/rides/${rideId}/negotiations`);
+}
+
+export async function apiCounterOffer(
+  rideId: string,
+  negotiationId: string,
+  amount: number
+) {
+  return fetchApi<NegotiationData>(
+    `/rides/${rideId}/negotiations/${negotiationId}/counter`,
+    { method: "POST", body: JSON.stringify({ amount }) }
+  );
+}
+
+export async function apiAcceptNegotiation(
+  rideId: string,
+  negotiationId: string
+) {
+  return fetchApi<{ message: string; negotiation: NegotiationData }>(
+    `/rides/${rideId}/negotiations/${negotiationId}/accept`,
+    { method: "PATCH" }
+  );
+}
+
+export async function apiRejectNegotiation(
+  rideId: string,
+  negotiationId: string
+) {
+  return fetchApi<{ message: string }>(
+    `/rides/${rideId}/negotiations/${negotiationId}/reject`,
+    { method: "PATCH" }
+  );
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 16 — OTP
+   ════════════════════════════════════════════════════ */
+
+export async function apiVerifyOtp(tripId: string, otp: string) {
+  return fetchApi<{ message: string; trip: { id: string; status: string } }>(
+    `/trips/${tripId}/otp/verify`,
+    { method: "POST", body: JSON.stringify({ otp }) }
+  );
+}
+
+export async function apiGetTripOtp(tripId: string) {
+  return fetchApi<{ otp: string }>(`/trips/${tripId}/otp`);
+}
+
