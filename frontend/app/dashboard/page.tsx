@@ -553,14 +553,14 @@ export default function EmployeeDashboard() {
   const statusBadge = (status: string) => {
     const map: Record<string, { label: string; cls: string }> = {
       SCHEDULED:   { label: "Booked", cls: "bg-blue-100 text-blue-800" },
-      IN_PROGRESS: { label: "In Progress 🚗", cls: "bg-green-100 text-green-800" },
-      COMPLETED:   { label: "Completed ✓", cls: "bg-gray-100 text-gray-700" },
+      IN_PROGRESS: { label: "In Progress", cls: "bg-green-100 text-green-800" },
+      COMPLETED:   { label: "Completed", cls: "bg-gray-100 text-gray-700" },
       CANCELLED:   { label: "Cancelled", cls: "bg-red-100 text-red-700" },
       RIDE_BOOKED: { label: "Booked", cls: "bg-blue-100 text-blue-800" },
       TRIP_STARTED:{ label: "Starting…", cls: "bg-yellow-100 text-yellow-800" },
-      TRIP_IN_PROGRESS:{ label: "In Progress 🚗", cls: "bg-green-100 text-green-800" },
-      TRIP_COMPLETED:  { label: "Completed ✓", cls: "bg-gray-100 text-gray-700" },
-      PAYMENT_PENDING: { label: "Payment Due 💳", cls: "bg-orange-100 text-orange-800" },
+      TRIP_IN_PROGRESS:{ label: "In Progress", cls: "bg-green-100 text-green-800" },
+      TRIP_COMPLETED:  { label: "Completed", cls: "bg-gray-100 text-gray-700" },
+      PAYMENT_PENDING: { label: "Payment Due", cls: "bg-orange-100 text-orange-800" },
     };
     const s = map[status] || { label: status, cls: "bg-gray-100 text-gray-700" };
     return <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${s.cls}`}>{s.label}</span>;
@@ -615,7 +615,7 @@ export default function EmployeeDashboard() {
                 {(["find","offer"] as const).map(m => (
                   <button key={m} onClick={() => { setCarpoolMode(m); setFindStep("search"); setOfferStep("form"); setSearchError(""); }}
                     className={`flex-1 py-3 rounded-xl font-heading font-extrabold text-sm transition-all text-center ${carpoolMode === m ? "bg-[#173300] text-[#FFEB5B] shadow-[3px_3px_0px_#173300]" : "text-[#173300]/70 hover:text-[#173300]"}`}>
-                    {m === "find" ? "🔍 Find Ride" : "🚗 Offer Ride"}
+                    {m === "find" ? "Find Ride" : "Offer Ride"}
                   </button>
                 ))}
               </div>
@@ -632,7 +632,7 @@ export default function EmployeeDashboard() {
                         {savedPlaces.map(sp => (
                           <button key={sp.id} type="button" onClick={() => setStartLoc(sp.address)}
                             className="px-3 py-1 bg-[#173300]/[0.05] border border-[#B6B6B6] rounded-xl text-xs font-semibold hover:bg-[#FFEB5B] transition-colors">
-                            📍 {sp.label}
+                            {sp.label}
                           </button>
                         ))}
                       </div>
@@ -663,7 +663,7 @@ export default function EmployeeDashboard() {
                       {/* Schedule Toggle */}
                       <div className="flex items-center justify-between p-4 rounded-2xl bg-[#173300]/[0.04] border-2 border-dashed border-[#B6B6B6]">
                         <div>
-                          <div className="font-heading font-extrabold text-sm text-[#173300]">📅 Schedule for Later</div>
+                          <div className="font-heading font-extrabold text-sm text-[#173300]">Schedule for Later</div>
                           <div className="text-xs text-[#173300]/60 mt-0.5">Toggle ON to pick a specific date & time</div>
                         </div>
                         <button type="button" onClick={() => setScheduledEnabled(!scheduledEnabled)}
@@ -684,7 +684,7 @@ export default function EmployeeDashboard() {
                       {searchError && <p className="text-red-600 text-xs font-semibold">{searchError}</p>}
 
                       <button type="submit" className="mt-2 w-full py-4 rounded-2xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-base border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                        Find Ride →
+                        Find Ride
                       </button>
                     </form>
                   </div>
@@ -699,22 +699,22 @@ export default function EmployeeDashboard() {
                     <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[8px_8px_0px_#173300] flex flex-col gap-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
                         <div className="bg-[#173300]/[0.04] p-3 rounded-xl border border-[#B6B6B6]">
-                          <span className="text-[#173300]/60 uppercase block text-[10px]">📍 Pickup</span>
+                          <span className="text-[#173300]/60 uppercase block text-[10px]">Pickup</span>
                           <span className="font-bold text-sm text-[#173300]">{startLoc}</span>
                         </div>
                         <div className="bg-[#173300]/[0.04] p-3 rounded-xl border border-[#B6B6B6]">
-                          <span className="text-[#173300]/60 uppercase block text-[10px]">🏁 Destination</span>
+                          <span className="text-[#173300]/60 uppercase block text-[10px]">Destination</span>
                           <span className="font-bold text-sm text-[#173300]">{destLoc}</span>
                         </div>
                       </div>
                       {scheduledEnabled && (
                         <div className="bg-[#FFEB5B]/40 border border-[#173300] rounded-xl p-3 text-xs font-mono">
-                          📅 Scheduled for: <strong>{new Date(travelDateTime).toLocaleString()}</strong>
+                          Scheduled for: <strong>{new Date(travelDateTime).toLocaleString()}</strong>
                         </div>
                       )}
                       <RouteMap startAddress={startLoc} destAddress={destLoc} />
                       <button onClick={handleConfirmRouteClick} className="w-full py-4 rounded-2xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-lg border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                        Search Rides Near This Route →
+                        Search Rides Near This Route
                       </button>
                     </div>
                   </div>
@@ -732,7 +732,6 @@ export default function EmployeeDashboard() {
 
                     {searchLoading && (
                       <div className="text-center py-16 text-[#173300]/60 font-mono text-sm">
-                        <div className="text-4xl mb-3 animate-spin inline-block">⟳</div>
                         <p>Searching nearby rides within 1km…</p>
                       </div>
                     )}
@@ -745,7 +744,6 @@ export default function EmployeeDashboard() {
 
                     {!searchLoading && !searchError && availableRides.length === 0 && (
                       <div className="bg-[#FCFAF5] border-2 border-dashed border-[#B6B6B6] rounded-3xl p-12 text-center">
-                        <div className="text-5xl mb-4">🚗</div>
                         <h3 className="font-heading text-xl font-extrabold text-[#173300]">No rides found nearby</h3>
                         <p className="text-xs font-mono text-[#173300]/60 mt-2">No one from your organization is offering a ride on this route right now.</p>
                         <button onClick={() => setFindStep("search")} className="mt-6 px-6 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">Try Different Route</button>
@@ -761,8 +759,8 @@ export default function EmployeeDashboard() {
                             </div>
                             <div>
                               <h3 className="font-heading text-xl font-extrabold text-[#173300]">{ride.driverName}</h3>
-                              <div className="text-xs font-mono text-[#173300]/60">{ride.model} · ⭐ {ride.driverRating.toFixed(1)}</div>
-                              <div className="text-xs font-mono text-[#173300]/70 mt-0.5">{ride.pickupLabel} → {ride.destinationLabel}</div>
+                              <div className="text-xs font-mono text-[#173300]/60">{ride.model} · Rating: {ride.driverRating.toFixed(1)}</div>
+                              <div className="text-xs font-mono text-[#173300]/70 mt-0.5">{ride.pickupLabel} to {ride.destinationLabel}</div>
                             </div>
                           </div>
                           <div className="text-right">
@@ -791,7 +789,7 @@ export default function EmployeeDashboard() {
                             Book Now ₹{ride.farePerSeat}
                           </button>
                           <button onClick={() => handleOpenBargain(ride)} className="flex-1 py-2.5 rounded-xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                            💬 Bargain
+                            Bargain
                           </button>
                         </div>
                       </div>
@@ -806,14 +804,13 @@ export default function EmployeeDashboard() {
               <>
                 {offerStep === "form" && (
                   <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 md:p-8 shadow-[8px_8px_0px_#173300] max-w-3xl w-full mx-auto flex flex-col gap-6">
-                    <h3 className="font-heading text-2xl font-extrabold text-[#173300]">🚗 Publish a Ride Offer</h3>
+                    <h3 className="font-heading text-2xl font-extrabold text-[#173300]">Publish a Ride Offer</h3>
 
                     {vehicles.length === 0 ? (
                       <div className="text-center py-8">
-                        <div className="text-4xl mb-3">🚗</div>
                         <p className="font-semibold text-[#173300]">You need a registered vehicle to offer a ride.</p>
                         <button onClick={() => { setActiveMainTab("my-vehicle"); setIsAddVehOpen(true); }} className="mt-4 px-6 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">
-                          Register a Vehicle →
+                          Register a Vehicle
                         </button>
                       </div>
                     ) : (
@@ -844,7 +841,7 @@ export default function EmployeeDashboard() {
                         {/* Offer Schedule Toggle */}
                         <div className="flex items-center justify-between p-4 rounded-2xl bg-[#173300]/[0.04] border-2 border-dashed border-[#B6B6B6]">
                           <div>
-                            <div className="font-heading font-extrabold text-sm text-[#173300]">📅 Schedule for Later</div>
+                            <div className="font-heading font-extrabold text-sm text-[#173300]">Schedule for Later</div>
                             <div className="text-xs text-[#173300]/60 mt-0.5">OFF = offer right now. ON = set future time.</div>
                           </div>
                           <button type="button" onClick={() => setOfferScheduledEnabled(!offerScheduledEnabled)}
@@ -861,7 +858,7 @@ export default function EmployeeDashboard() {
                         )}
 
                         <button type="submit" className="mt-2 w-full py-4 rounded-2xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-base border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                          Preview Route →
+                          Preview Route
                         </button>
                       </form>
                     )}
@@ -884,7 +881,7 @@ export default function EmployeeDashboard() {
                     <RouteMap startAddress={offerStartLoc} destAddress={offerDestLoc} />
 
                     <button onClick={handleConfirmOfferPublish} disabled={offerLoading} className="w-full py-4 rounded-2xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-lg border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-60">
-                      {offerLoading ? "Publishing…" : "🚀 Publish Ride Offer"}
+                      {offerLoading ? "Publishing…" : "Publish Ride Offer"}
                     </button>
                   </div>
                 )}
@@ -902,12 +899,11 @@ export default function EmployeeDashboard() {
                 const { apiGetMyTrips } = await import("../lib/api");
                 const fresh = await apiGetMyTrips().catch(() => []);
                 setTrips(fresh.map(mapTrip));
-              }} className="text-xs font-mono font-bold underline text-[#173300]">↻ Refresh</button>
+              }} className="text-xs font-mono font-bold underline text-[#173300]">Refresh</button>
             </div>
 
             {trips.length === 0 && (
               <div className="text-center py-16">
-                <div className="text-5xl mb-4">🗺️</div>
                 <h3 className="font-heading text-xl font-extrabold text-[#173300]">No trips yet</h3>
                 <p className="text-xs text-[#173300]/60 mt-2">Find or offer a ride to get started.</p>
                 <button onClick={() => setActiveMainTab("carpooling")} className="mt-6 px-6 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">Go to Dashboard</button>
@@ -921,14 +917,14 @@ export default function EmployeeDashboard() {
                   <div className="flex justify-between items-start pb-4 border-b-2 border-dashed border-[#B6B6B6]">
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 rounded-2xl bg-[#FFEB5B] border-2 border-[#173300] flex items-center justify-center font-heading font-extrabold text-xl shadow-[3px_3px_0px_#173300]">
-                        {trip.role === "DRIVER" ? "🚗" : trip.driverName.charAt(0)}
+                        {trip.role === "DRIVER" ? "D" : trip.driverName.charAt(0)}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="font-heading text-xl font-extrabold text-[#173300]">{trip.role === "DRIVER" ? "Your Ride" : trip.driverName}</h3>
                           <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-[#173300]/10 rounded-lg">{trip.role}</span>
                         </div>
-                        <div className="text-xs font-mono text-[#173300]/70">{trip.pickupLabel} → {trip.destinationLabel}</div>
+                        <div className="text-xs font-mono text-[#173300]/70">{trip.pickupLabel} to {trip.destinationLabel}</div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -954,7 +950,7 @@ export default function EmployeeDashboard() {
                   {trackingTripId === trip.id && driverLocation && (
                     <div className="rounded-2xl overflow-hidden border-2 border-[#173300]">
                       <div className="bg-[#173300] text-[#FFEB5B] px-4 py-2 text-xs font-mono font-bold flex justify-between">
-                        <span>🟢 Live Tracking</span>
+                        <span>Live Tracking</span>
                         {etaMinutes != null && <span>ETA: ~{Math.round(etaMinutes)} min</span>}
                       </div>
                       <RouteMap startAddress={trip.pickupLabel} destAddress={trip.destinationLabel} />
@@ -981,7 +977,7 @@ export default function EmployeeDashboard() {
                       ) : (
                         <button onClick={() => handleDriverStartRide(trip)} disabled={otpLoading}
                           className="w-full py-3.5 rounded-2xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-base border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-60">
-                          {otpLoading ? "Generating OTP…" : "🚀 Start Ride — Generate OTP"}
+                          {otpLoading ? "Generating OTP…" : "Start Ride — Generate OTP"}
                         </button>
                       )}
                       {otpError && <p className="text-red-600 text-xs font-semibold text-center">{otpError}</p>}
@@ -1007,14 +1003,14 @@ export default function EmployeeDashboard() {
                   {/* Driver: end ride */}
                   {trip.role === "DRIVER" && trip.status === "IN_PROGRESS" && (
                     <button onClick={() => handleEndRide(trip)} className="w-full py-3.5 rounded-2xl bg-red-600 text-white font-heading font-extrabold text-base border-2 border-red-700 shadow-[4px_4px_0px_red] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                      🏁 End Ride
+                      End Ride
                     </button>
                   )}
 
                   {/* Start tracking button */}
                   {isActiveTrip(trip) && trackingTripId !== trip.id && trip.status === "IN_PROGRESS" && (
                     <button onClick={() => setTrackingTripId(trip.id)} className="w-full py-2.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-heading font-extrabold text-sm hover:bg-[#FFEB5B] transition-colors">
-                      📍 Track Live Location
+                      Track Live Location
                     </button>
                   )}
 
@@ -1023,7 +1019,7 @@ export default function EmployeeDashboard() {
                     <div className="flex items-center justify-between pt-2 border-t-2 border-dashed border-[#B6B6B6]">
                       <span className="font-heading text-2xl font-extrabold text-[#173300]">₹{trip.fareAmount}</span>
                       <button onClick={() => setPaymentTrip(trip)} className="px-8 py-3 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-base border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                        Pay Now →
+                        Pay Now
                       </button>
                     </div>
                   )}
@@ -1032,11 +1028,11 @@ export default function EmployeeDashboard() {
                   {isActiveTrip(trip) && (
                     <div className="flex gap-3">
                       <button onClick={() => handleOpenChat(trip)} className="flex-1 px-4 py-2.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-heading font-extrabold text-xs hover:bg-[#FFEB5B] transition-colors">
-                        💬 Chat
+                        Chat
                       </button>
                       {trip.driverPhone && (
                         <a href={`tel:${trip.driverPhone}`} className="flex-1 px-4 py-2.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-heading font-extrabold text-xs hover:bg-[#FFEB5B] transition-colors text-center">
-                          📞 Call {trip.role === "DRIVER" ? "Passenger" : "Driver"}
+                          Call {trip.role === "DRIVER" ? "Passenger" : "Driver"}
                         </a>
                       )}
                     </div>
@@ -1059,7 +1055,6 @@ export default function EmployeeDashboard() {
 
             {vehicles.length === 0 ? (
               <div className="text-center py-16">
-                <div className="text-5xl mb-4">🚗</div>
                 <h3 className="font-heading text-xl font-extrabold text-[#173300]">No vehicles registered</h3>
                 <p className="text-xs text-[#173300]/60 mt-2">Register your vehicle to start offering rides.</p>
                 <button onClick={() => setIsAddVehOpen(true)} className="mt-6 px-6 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">Register Now</button>
@@ -1091,7 +1086,6 @@ export default function EmployeeDashboard() {
 
             {rideHistory.length === 0 ? (
               <div className="text-center py-16">
-                <div className="text-5xl mb-4">📋</div>
                 <h3 className="font-heading text-xl font-extrabold text-[#173300]">No completed trips yet</h3>
                 <p className="text-xs text-[#173300]/60 mt-2">Completed rides will appear here.</p>
               </div>
@@ -1101,7 +1095,7 @@ export default function EmployeeDashboard() {
                   <div key={h.id} className="bg-[#173300]/[0.03] border-2 border-dashed border-[#B6B6B6] rounded-2xl p-4 flex justify-between items-center">
                     <div>
                       <div className="text-[10px] font-mono text-[#173300]/50">{h.departureTime}</div>
-                      <h4 className="font-heading text-lg font-extrabold text-[#173300]">{h.pickupLabel} → {h.destinationLabel}</h4>
+                      <h4 className="font-heading text-lg font-extrabold text-[#173300]">{h.pickupLabel} to {h.destinationLabel}</h4>
                       <div className="text-xs text-[#173300]/70">
                         {h.role === "DRIVER" ? "You drove" : `Driver: ${h.driverName}`} · {h.vehicleModel}
                       </div>
@@ -1160,7 +1154,6 @@ export default function EmployeeDashboard() {
             </div>
             {savedPlaces.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-4xl mb-3">📍</div>
                 <p className="font-semibold text-[#173300]">No saved places yet.</p>
                 <button onClick={() => setIsAddPlaceOpen(true)} className="mt-4 px-6 py-2 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300]">Add Your First Place</button>
               </div>
@@ -1183,7 +1176,7 @@ export default function EmployeeDashboard() {
         <div className="fixed inset-0 z-50 bg-[#173300]/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 max-w-md w-full shadow-[8px_8px_0px_#173300] flex flex-col gap-5">
             <div className="flex justify-between items-center">
-              <h3 className="font-heading text-2xl font-extrabold text-[#173300]">💬 Bargain Fare</h3>
+              <h3 className="font-heading text-2xl font-extrabold text-[#173300]">Bargain Fare</h3>
               <button onClick={() => setNegotiating(null)} className="w-8 h-8 rounded-full border border-[#173300] font-bold text-xs hover:bg-[#FFEB5B]">✕</button>
             </div>
 
@@ -1232,9 +1225,9 @@ export default function EmployeeDashboard() {
       {paymentTrip && (
         <div className="fixed inset-0 z-50 bg-[#173300]/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 max-w-md w-full shadow-[8px_8px_0px_#173300] flex flex-col gap-5">
-            <h3 className="font-heading text-2xl font-extrabold text-[#173300]">💳 Pay for Ride</h3>
+            <h3 className="font-heading text-2xl font-extrabold text-[#173300]">Pay for Ride</h3>
             <div className="bg-[#173300]/[0.04] border border-dashed border-[#B6B6B6] rounded-2xl p-4 font-mono text-xs space-y-1">
-              <div>Route: <span className="font-bold">{paymentTrip.pickupLabel} → {paymentTrip.destinationLabel}</span></div>
+              <div>Route: <span className="font-bold">{paymentTrip.pickupLabel} to {paymentTrip.destinationLabel}</span></div>
               <div>Total: <span className="font-bold text-lg text-[#173300]">₹{paymentTrip.fareAmount}</span></div>
             </div>
             <div className="flex flex-col gap-2">
@@ -1242,7 +1235,7 @@ export default function EmployeeDashboard() {
               {(["CASH","WALLET","CARD","UPI"] as const).map(m => (
                 <button key={m} onClick={() => setPayMethod(m)}
                   className={`p-3 rounded-xl border-2 font-mono text-xs font-bold flex justify-between items-center ${payMethod === m ? "bg-[#173300] text-[#FFEB5B] border-[#173300]" : "bg-[#FCFAF5] text-[#173300] border-[#B6B6B6]"}`}>
-                  <span>{m === "CASH" ? "💵 Cash" : m === "WALLET" ? "👛 Wallet" : m === "CARD" ? "💳 Card" : "📱 UPI"}</span>
+                  <span>{m === "CASH" ? "Cash" : m === "WALLET" ? "Wallet" : m === "CARD" ? "Card" : "UPI"}</span>
                   {m === "WALLET" && <span className="opacity-70">(Balance: ₹{walletBalance.toFixed(0)})</span>}
                 </button>
               ))}
@@ -1263,13 +1256,13 @@ export default function EmployeeDashboard() {
           <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 max-w-lg w-full shadow-[8px_8px_0px_#173300] flex flex-col gap-4">
             <div className="flex justify-between items-center border-b-2 border-dashed border-[#B6B6B6] pb-3">
               <div>
-                <h3 className="font-heading text-xl font-extrabold text-[#173300]">💬 Trip Chat</h3>
-                <span className="text-xs font-mono text-[#173300]/60">{chatOpenTrip.pickupLabel} → {chatOpenTrip.destinationLabel}</span>
+                <h3 className="font-heading text-xl font-extrabold text-[#173300]">Trip Chat</h3>
+                <span className="text-xs font-mono text-[#173300]/60">{chatOpenTrip.pickupLabel} to {chatOpenTrip.destinationLabel}</span>
               </div>
               <button onClick={() => setChatOpenTrip(null)} className="w-8 h-8 rounded-full border border-[#173300] font-bold text-xs hover:bg-[#FFEB5B]">✕</button>
             </div>
             <div className="h-64 overflow-y-auto space-y-3 bg-[#173300]/[0.03] border border-dashed border-[#B6B6B6] rounded-2xl p-4">
-              {chatMessages.length === 0 && <p className="text-xs text-center text-[#173300]/40 font-mono mt-8">No messages yet. Say hi! 👋</p>}
+              {chatMessages.length === 0 && <p className="text-xs text-center text-[#173300]/40 font-mono mt-8">No messages yet. Say hi!</p>}
               {chatMessages.map((msg, idx) => (
                 <div key={idx} className="bg-[#FCFAF5] border border-[#173300] rounded-xl p-3 text-xs font-mono">
                   <div className="flex justify-between text-[10px] font-bold text-[#173300]/50 mb-1"><span>{msg.sender}</span><span>{msg.time}</span></div>

@@ -131,7 +131,9 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const { login } = useAuth();
 
-  const [tab, setTab] = useState<Tab>("signin");
+  const [tab, setTab] = useState<Tab>(() =>
+    searchParams.get("tab") === "signup" || searchParams.get("mode") === "signup" ? "signup" : "signin"
+  );
   const [signupStep, setSignupStep] = useState<SignupStep>(1);
 
   /* Dynamic Organizations list from backend */
