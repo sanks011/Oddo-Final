@@ -167,9 +167,30 @@ export async function apiCreateOrganization(payload: {
   costPerKmDefault?: number;
   status?: string;
 }): Promise<OrgData> {
-  return fetchApi<OrgData>("/orgs", {
+  const res = await fetchApi<any>("/orgs", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+  const rawObj = res?.org || res?.data || res;
+  return {
+    ...rawObj,
+    id: rawObj?.id || rawObj?._id || rawObj?.orgId || "",
+  } as OrgData;
+}
+
+export async function apiUpdateOrganization(
+  orgId: string,
+  payload: Partial<{ name: string; status: string; fuelCostPerLitre: number; costPerKmDefault: number }>
+) {
+  return fetchApi<OrgData>(`/orgs/${orgId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiDeleteOrganization(orgId: string) {
+  return fetchApi<{ message: string }>(`/orgs/${orgId}`, {
+    method: "DELETE",
   });
 }
 

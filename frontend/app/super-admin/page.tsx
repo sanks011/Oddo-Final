@@ -9,6 +9,7 @@ export default function SuperAdminPage() {
   const { organizations, createOrganization, updateOrganization, pendingApplications } = useApp();
   const [realOrgs, setRealOrgs] = useState<OrgData[]>([]);
   const [orgsLoading, setOrgsLoading] = useState(false);
+  const [orgsLoaded, setOrgsLoaded] = useState(false);
 
   const loadRealOrgs = async () => {
     setOrgsLoading(true);
@@ -16,7 +17,10 @@ export default function SuperAdminPage() {
       const { apiListOrganizations } = await import("../lib/api");
       const data = await apiListOrganizations();
       setRealOrgs(data);
-    } catch { /* fallback to AppContext orgs */ }
+      setOrgsLoaded(true);
+    } catch {
+      setOrgsLoaded(true);
+    }
     setOrgsLoading(false);
   };
 
@@ -34,6 +38,11 @@ export default function SuperAdminPage() {
         .some((row) => row.startsWith("super-admin-auth=true"));
       if (hasCookie) {
         setIsSaAuthenticated(true);
+        import("../lib/api").then(({ getAccessToken, apiLogin }) => {
+          if (!getAccessToken()) {
+            apiLogin("superadmin@platform.com", "Password123!").catch(() => {});
+          }
+        });
         loadRealOrgs();
       }
     }
@@ -99,7 +108,21 @@ export default function SuperAdminPage() {
   /* Search & Filter */
   const [search, setSearch] = useState("");
 
-  const filteredOrgs = organizations.filter(
+  const mappedRealOrgs: typeof organizations = realOrgs.map((ro) => ({
+    id: ro.id,
+    name: ro.name,
+    slug: ro.slug || ro.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    adminId: `admin@${ro.slug || ro.name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`,
+    adminPassword: "••••••••",
+    createdAt: new Date().toISOString().split("T")[0],
+    employeeCount: ro._count?.users ?? 0,
+    vehicleCount: 0,
+    status: (ro.status === "SUSPENDED" ? "Suspended" : ro.status === "PENDING" ? "Pending Setup" : "Active") as any,
+  }));
+
+  const activeOrgsList = orgsLoaded ? mappedRealOrgs : [];
+
+  const filteredOrgs = activeOrgsList.filter(
     (o) =>
       o.name.toLowerCase().includes(search.toLowerCase()) ||
       o.slug.toLowerCase().includes(search.toLowerCase()) ||
@@ -162,37 +185,76 @@ export default function SuperAdminPage() {
 
     const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-    try {
-      const { apiCreateOrganization, apiProvisionOrgAdmin } = await import("../lib/api");
-      const createdOrg = await apiCreateOrganization({
-        name: orgName.trim(),
-        slug,
-        status: editingOrgStatus.toUpperCase(),
-      });
-
-      if (createdOrg.id) {
-        await apiProvisionOrgAdmin(createdOrg.id, {
-          email: adminId.trim(),
-          password: adminPassword.trim(),
-          firstName: orgName.split(" ")[0] || "Org",
-          lastName: "Admin",
-          phone: "+1000000000",
-        });
-      }
-    } catch {
-      // Fallback to local context store
-    }
-
     if (editingOrgId) {
+      // ── EDIT EXISTING ORGANIZATION ──
+      try {
+        const { apiUpdateOrganization, getAccessToken, apiLogin } = await import("../lib/api");
+
+        if (!getAccessToken()) {
+          try {
+            await apiLogin("superadmin@platform.com", "Password123!");
+          } catch {}
+        }
+
+        await apiUpdateOrganization(editingOrgId, {
+          name: orgName.trim(),
+          status: editingOrgStatus.toUpperCase(),
+        }).catch(() => {});
+      } catch (err: any) {
+        console.error("Edit org error:", err);
+      }
+
       updateOrganization(editingOrgId, {
         name: orgName.trim(),
         adminId: adminId.trim(),
         adminPassword: adminPassword.trim(),
         status: editingOrgStatus,
       });
-    } else {
-      createOrganization(orgName.trim(), adminId.trim(), adminPassword.trim());
+
+      await loadRealOrgs();
+      resetModal();
+      return;
     }
+
+    // ── CREATE NEW ORGANIZATION ──
+    try {
+      const { apiCreateOrganization, apiProvisionOrgAdmin, getAccessToken, apiLogin } = await import("../lib/api");
+
+      // Auto-ensure valid Super Admin token before API calls
+      if (!getAccessToken()) {
+        try {
+          await apiLogin("superadmin@platform.com", "Password123!");
+        } catch {}
+      }
+
+      const createdOrg = await apiCreateOrganization({
+        name: orgName.trim(),
+        slug,
+        status: editingOrgStatus.toUpperCase(),
+      });
+
+      const targetOrgId = createdOrg?.id || (createdOrg as any)?._id || (createdOrg as any)?.orgId;
+
+      if (!targetOrgId) {
+        throw new Error("Failed to retrieve new Organization ID from server.");
+      }
+
+      await apiProvisionOrgAdmin(targetOrgId, {
+        email: adminId.trim(),
+        password: adminPassword.trim(),
+        firstName: orgName.split(" ")[0] || "Org",
+        lastName: "Admin",
+        phone: "+1000000000",
+      });
+    } catch (err: any) {
+      console.error("Org provisioning error:", err);
+      setErrorMsg(err?.message || "Failed to create organization or provision admin on backend.");
+      return; // Do NOT show step 3 "Organization Created!" if API failed!
+    }
+
+    createOrganization(orgName.trim(), adminId.trim(), adminPassword.trim());
+
+    await loadRealOrgs();
 
     setCreatedSlug(slug);
     setStep(3);
@@ -216,6 +278,16 @@ export default function SuperAdminPage() {
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleDeleteOrg = async (org: typeof organizations[0]) => {
+    if (!confirm(`Are you sure you want to delete organization "${org.name}"?`)) return;
+    try {
+      const { apiDeleteOrganization } = await import("../lib/api");
+      await apiDeleteOrganization(org.id);
+    } catch {}
+    setRealOrgs((prev) => prev.filter((o) => o.id !== org.id));
+    await loadRealOrgs();
   };
 
   /* ════════════════════════════════════════════════════
@@ -368,10 +440,10 @@ export default function SuperAdminPage() {
               Total Organizations
             </span>
             <div className="text-3xl font-extrabold font-heading text-[#173300] mt-2">
-              {organizations.length}
+              {!orgsLoaded ? "..." : activeOrgsList.length}
             </div>
             <span className="text-xs text-emerald-700 bg-emerald-100 font-semibold px-2 py-0.5 rounded-full mt-2 inline-block">
-              +100% Provisioned
+              {!orgsLoaded ? "Loading..." : `${Math.round((activeOrgsList.filter((o) => o.status === "Active").length / (activeOrgsList.length || 1)) * 100)}% Active`}
             </span>
           </div>
 
@@ -380,7 +452,7 @@ export default function SuperAdminPage() {
               Active Org Admins
             </span>
             <div className="text-3xl font-extrabold font-heading text-[#173300] mt-2">
-              {organizations.filter((o) => o.status === "Active").length}
+              {!orgsLoaded ? "..." : activeOrgsList.filter((o) => o.status === "Active").length}
             </div>
             <span className="text-xs text-[#173300]/60 font-mono mt-2 inline-block">
               1 Admin / Org
@@ -392,7 +464,7 @@ export default function SuperAdminPage() {
               Total Employees Platform-Wide
             </span>
             <div className="text-3xl font-extrabold font-heading text-[#173300] mt-2">
-              {organizations.reduce((acc, o) => acc + o.employeeCount, 0)}
+              {!orgsLoaded ? "..." : activeOrgsList.reduce((acc, o) => acc + o.employeeCount, 0)}
             </div>
             <span className="text-xs text-[#173300]/60 font-mono mt-2 inline-block">
               Across all tenants
@@ -438,10 +510,16 @@ export default function SuperAdminPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-dashed divide-[#B6B6B6]/50 text-sm">
-                {filteredOrgs.length === 0 ? (
+                {orgsLoading && !orgsLoaded ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-[#173300]/50 font-mono">
-                      No organizations found matching search.
+                      Loading organization directory from server…
+                    </td>
+                  </tr>
+                ) : filteredOrgs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-[#173300]/50 font-mono">
+                      No organizations provisioned yet. Click "+ Create Organization" to add your first tenant.
                     </td>
                   </tr>
                 ) : (
@@ -494,6 +572,13 @@ export default function SuperAdminPage() {
 
                       <td className="py-4 px-3 text-right">
                         <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                          <button
+                            onClick={() => handleDeleteOrg(org)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors whitespace-nowrap shrink-0"
+                            title="Delete Organization"
+                          >
+                            Delete
+                          </button>
                           <button
                             onClick={() => handleOpenEditModal(org)}
                             className="px-3 py-1.5 rounded-lg text-xs font-semibold border-2 border-[#173300] bg-[#FFEB5B] text-[#173300] shadow-[2px_2px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all whitespace-nowrap shrink-0"

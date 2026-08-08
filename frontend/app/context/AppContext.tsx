@@ -86,41 +86,7 @@ interface AppContextValue {
 
 /* ── Pre-seeded Mock Data ───────────────────────────── */
 
-const INITIAL_ORGS: Organization[] = [
-  {
-    id: "org-1",
-    name: "Acme Corp",
-    slug: "acme-corp",
-    adminId: "admin@acme.com",
-    adminPassword: "admin123pass",
-    createdAt: "2026-01-15",
-    employeeCount: 142,
-    vehicleCount: 18,
-    status: "Active",
-  },
-  {
-    id: "org-2",
-    name: "NovaTech Industries",
-    slug: "novatech-industries",
-    adminId: "admin@novatech.io",
-    adminPassword: "novapassword2026",
-    createdAt: "2026-02-01",
-    employeeCount: 88,
-    vehicleCount: 12,
-    status: "Active",
-  },
-  {
-    id: "org-3",
-    name: "Skyline Ventures",
-    slug: "skyline-ventures",
-    adminId: "skyadmin@skyline.org",
-    adminPassword: "skylinepass789",
-    createdAt: "2026-03-10",
-    employeeCount: 64,
-    vehicleCount: 7,
-    status: "Active",
-  },
-];
+const INITIAL_ORGS: Organization[] = [];
 
 const INITIAL_APPLICATIONS: PendingApplication[] = [
   {

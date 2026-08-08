@@ -94,6 +94,10 @@ const INITIAL_VEHICLES: Vehicle[] = [
   },
 ];
 
+const now = new Date();
+const formattedNowPlus1H = new Date(now.getTime() + 3600000).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+const formattedNowPlus2H = new Date(now.getTime() + 7200000).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+
 const INITIAL_AVAILABLE_RIDES: AvailableRide[] = [
   {
     id: "ride-1",
@@ -104,7 +108,7 @@ const INITIAL_AVAILABLE_RIDES: AvailableRide[] = [
     plateNumber: "GJ01AB1234",
     pickupLabel: "Iskcon",
     destinationLabel: "Infocity",
-    departureTime: "07:00 PM 18/July/26",
+    departureTime: formattedNowPlus1H,
     availableSeats: 2,
     farePerSeat: 120,
     distanceKm: 26,
@@ -119,7 +123,7 @@ const INITIAL_AVAILABLE_RIDES: AvailableRide[] = [
     plateNumber: "GJ01XY9988",
     pickupLabel: "Iskcon",
     destinationLabel: "Infocity",
-    departureTime: "08:00 PM 18/July/26",
+    departureTime: formattedNowPlus2H,
     availableSeats: 2,
     farePerSeat: 120,
     distanceKm: 26,
@@ -138,7 +142,7 @@ const INITIAL_TRIPS: Trip[] = [
     plateNumber: "GJ01AB1234",
     pickupLabel: "Iskcon",
     destinationLabel: "Infocity",
-    departureTime: "07:00 PM 18/July/26",
+    departureTime: formattedNowPlus1H,
     seatsBooked: 1,
     fareAmount: 120,
     status: "TRIP_IN_PROGRESS",
@@ -248,7 +252,7 @@ export default function EmployeeDashboard() {
   /* Find Ride Inputs */
   const [startLoc, setStartLoc] = useState("");
   const [destLoc, setDestLoc] = useState("");
-  const [travelDateTime, setTravelDateTime] = useState("2026-08-08T18:30");
+  const [travelDateTime, setTravelDateTime] = useState(() => new Date(Date.now() + 1800000).toISOString().slice(0, 16));
   const [selectedSeats, setSelectedSeats] = useState(1);
   const [isRecurring, setIsRecurring] = useState(true);
   const [recurringDays, setRecurringDays] = useState(["Mo", "Tu", "We", "Th", "Fr"]);
@@ -257,7 +261,7 @@ export default function EmployeeDashboard() {
   const [offerVehId, setOfferVehId] = useState(vehicles[0]?.id || "");
   const [offerStartLoc, setOfferStartLoc] = useState("");
   const [offerDestLoc, setOfferDestLoc] = useState("");
-  const [offerDateTime, setOfferDateTime] = useState("2026-08-08T19:00");
+  const [offerDateTime, setOfferDateTime] = useState(() => new Date(Date.now() + 3600000).toISOString().slice(0, 16));
   const [offerSeatsAvailable, setOfferSeatsAvailable] = useState(3);
   const [offerFarePerSeat, setOfferFarePerSeat] = useState(120);
 
