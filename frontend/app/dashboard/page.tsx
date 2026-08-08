@@ -418,6 +418,71 @@ export default function EmployeeDashboard() {
     };
   }
 
+  /* ── Helper to refresh active trips & history silently ── */
+  const refreshTrips = async () => {
+    try {
+      const { apiGetMyTrips, apiGetTripHistory } = await import("../lib/api");
+      const [tripData, histData] = await Promise.allSettled([
+        apiGetMyTrips(),
+        apiGetTripHistory(1, 30),
+      ]);
+      if (tripData.status === "fulfilled") {
+        setTrips(tripData.value.map(mapTrip));
+      }
+      if (histData.status === "fulfilled") {
+        setRideHistory(histData.value.trips.map(mapTrip));
+      }
+    } catch {}
+  };
+
+  /* ── Global real-time socket listeners & quiet fallback sync ── */
+  useEffect(() => {
+    let intervalId: any;
+    const setupGlobalSocket = async () => {
+      const { getTrackingSocket } = await import("../lib/socket");
+      const sock = getTrackingSocket();
+
+      const handleGlobalSync = () => {
+        refreshTrips();
+        loadOfferedRides();
+      };
+
+      sock.on("ride:created", handleGlobalSync);
+      sock.on("join_request:created", handleGlobalSync);
+      sock.on("ride:accepted", handleGlobalSync);
+      sock.on("join_request:declined", handleGlobalSync);
+      sock.on("negotiation:offer", handleGlobalSync);
+      sock.on("negotiation:accepted", handleGlobalSync);
+      sock.on("negotiation:rejected", handleGlobalSync);
+      sock.on("trip:updated", handleGlobalSync);
+      sock.on("trip:status", handleGlobalSync);
+      sock.on("trip:pickup_verified", handleGlobalSync);
+      sock.on("ride:started", handleGlobalSync);
+      sock.on("payment:updated", handleGlobalSync);
+
+      // Quiet fallback background poll (every 6 seconds)
+      intervalId = setInterval(handleGlobalSync, 6000);
+    };
+
+    setupGlobalSocket();
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, []);
+
+  /* ── Auto-join active trip socket rooms ── */
+  useEffect(() => {
+    if (!trips.length) return;
+    import("../lib/socket").then(({ joinTripRoom }) => {
+      trips.forEach((t) => {
+        if (t.id && t.status !== "COMPLETED" && t.status !== "CANCELLED") {
+          joinTripRoom(t.id);
+        }
+      });
+    });
+  }, [trips]);
+
   /* ── Live tracking via Socket.IO ── */
   useEffect(() => {
     if (!trackingTripId) return;
