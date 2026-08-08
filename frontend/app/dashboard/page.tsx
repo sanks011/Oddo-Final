@@ -7,8 +7,26 @@ import dynamic from "next/dynamic";
 import type { Socket } from "socket.io-client";
 import { useAuth } from "../context/AuthContext";
 import LocationInput from "../components/LocationInput";
+import { useToast } from "../components/Toast";
 
 const RouteMap = dynamic(() => import("../components/RouteMap"), { ssr: false });
+
+const SkeletonCard = () => (
+  <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] animate-pulse flex flex-col gap-4 max-w-4xl w-full mx-auto">
+    <div className="flex justify-between items-start">
+      <div className="space-y-2 flex-1">
+        <div className="h-4 w-28 bg-[#173300]/10 rounded-md"></div>
+        <div className="h-6 w-3/4 bg-[#173300]/20 rounded-md"></div>
+        <div className="h-4 w-1/2 bg-[#173300]/10 rounded-md"></div>
+      </div>
+      <div className="space-y-2 text-right">
+        <div className="h-4 w-16 bg-[#173300]/10 rounded-md ml-auto"></div>
+        <div className="h-6 w-24 bg-[#173300]/20 rounded-md ml-auto"></div>
+      </div>
+    </div>
+    <div className="h-16 w-full bg-[#173300]/5 rounded-2xl"></div>
+  </div>
+);
 
 /* ── Types ─────────────────────────────────────────── */
 type MainTab = "carpooling" | "my-trips" | "my-vehicle" | "ride-history" | "wallet" | "setting";
@@ -65,7 +83,8 @@ function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number)
 
 export default function EmployeeDashboard() {
   const router = useRouter();
-  const { logout, user } = useAuth();
+  const { user, logout } = useAuth();
+  const { showToast } = useToast();
 
   /* Auth Guard */
   useEffect(() => {
@@ -75,7 +94,7 @@ export default function EmployeeDashboard() {
     }
   }, [router]);
 
-  /* Main Navigation */
+  /* Dashboard Navigation */
   const [activeMainTab, setActiveMainTab] = useState<MainTab>("carpooling");
   const [carpoolMode, setCarpoolMode] = useState<"find" | "offer">("find");
   const [findStep, setFindStep] = useState<FindRideStep>("search");
@@ -86,6 +105,8 @@ export default function EmployeeDashboard() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [availableRides, setAvailableRides] = useState<AvailableRide[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [tripsLoading, setTripsLoading] = useState(true);
+  const [offeredLoading, setOfferedLoading] = useState(true);
   const [rideHistory, setRideHistory] = useState<Trip[]>([]);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [walletTransactions, setWalletTransactions] = useState<Array<{ id: string; type: string; amount: number; description: string; createdAt: string }>>([]);
@@ -168,6 +189,7 @@ export default function EmployeeDashboard() {
 
   const loadOfferedRides = async () => {
     try {
+      setOfferedLoading(true);
       const { apiGetMyOfferedRides } = await import("../lib/api");
       const offers = await apiGetMyOfferedRides();
       setOfferedRides(offers);
@@ -177,13 +199,16 @@ export default function EmployeeDashboard() {
           joinRideRoom(r.id);
         } catch {}
       });
-    } catch {}
+    } catch {} finally {
+      setOfferedLoading(false);
+    }
   };
 
   /* ── Load backend data on mount ── */
   useEffect(() => {
     const load = async () => {
       try {
+        setTripsLoading(true);
         const { apiListVehicles, apiGetMyTrips, apiGetWallet, apiListSavedPlaces, apiGetTripHistory } = await import("../lib/api");
         const [vehData, tripData, walletData, places, histData] = await Promise.allSettled([
           apiListVehicles(),
@@ -222,7 +247,9 @@ export default function EmployeeDashboard() {
           setSavedPlaces(places.value.map(p => ({ id: p.id, label: p.label, address: p.address })));
         }
         loadOfferedRides();
-      } catch { /* graceful fail */ }
+      } catch { /* graceful fail */ } finally {
+        setTripsLoading(false);
+      }
     };
     load();
   }, []);
@@ -397,7 +424,7 @@ export default function EmployeeDashboard() {
         history: [...prev.history, { by: "You", amount: bargainAmount, time: new Date().toLocaleTimeString() }],
       } : null);
     } catch (err: any) {
-      alert(err?.message || "Could not send offer");
+      showToast(err?.message || "Could not send offer", "error");
       setSearchError(err?.message || "Could not send offer");
     }
   };
@@ -410,13 +437,14 @@ export default function EmployeeDashboard() {
       await apiAcceptNegotiation(negotiating.rideId, negotiating.negotiationId);
       emitNegotiationAccept(negotiating.rideId, negotiating.negotiationId, negotiating.currentOffer);
       await apiSubmitJoinRequest(negotiating.rideId, { agreedFare: negotiating.currentOffer, seatsRequested: selectedSeats });
+      showToast(`Negotiation accepted at ₹${negotiating.currentOffer}! Join request sent.`, "success");
       setNegotiating(null);
       setActiveMainTab("my-trips");
       const { apiGetMyTrips } = await import("../lib/api");
       const fresh = await apiGetMyTrips();
       setTrips(fresh.map(mapTrip));
     } catch (err: any) {
-      alert(err?.message || "Failed to accept negotiation");
+      showToast(err?.message || "Failed to accept negotiation", "error");
       setSearchError(err?.message || "Failed to accept negotiation");
     }
   };
@@ -424,7 +452,7 @@ export default function EmployeeDashboard() {
   const handleDriverCounterOffer = async (rideId: string, negId: string) => {
     const amount = driverCounterInputs[negId];
     if (!amount || amount <= 0) {
-      alert("Please enter a valid counter offer amount.");
+      showToast("Please enter a valid counter offer amount.", "warning");
       return;
     }
     try {
@@ -432,10 +460,10 @@ export default function EmployeeDashboard() {
       const { emitNegotiationOffer } = await import("../lib/socket");
       await apiCounterOffer(rideId, negId, amount);
       emitNegotiationOffer(rideId, negId, amount, "DRIVER");
-      alert(`Counter offer of ₹${amount} sent to passenger!`);
+      showToast(`Counter offer of ₹${amount} sent to passenger!`, "success");
       loadOfferedRides();
     } catch (err: any) {
-      alert(err?.message || "Could not send counter offer");
+      showToast(err?.message || "Could not send counter offer", "error");
     }
   };
 
@@ -445,10 +473,10 @@ export default function EmployeeDashboard() {
       const { emitNegotiationAccept } = await import("../lib/socket");
       await apiAcceptNegotiation(rideId, negId);
       emitNegotiationAccept(rideId, negId, agreedFare);
-      alert(`Accepted passenger's offer of ₹${agreedFare}! The passenger can now proceed to book.`);
+      showToast(`Accepted passenger's offer of ₹${agreedFare}!`, "success");
       loadOfferedRides();
     } catch (err: any) {
-      alert(err?.message || "Could not accept negotiation");
+      showToast(err?.message || "Could not accept negotiation", "error");
     }
   };
 
@@ -456,9 +484,10 @@ export default function EmployeeDashboard() {
     try {
       const { apiRejectNegotiation } = await import("../lib/api");
       await apiRejectNegotiation(rideId, negId);
+      showToast("Negotiation declined", "info");
       loadOfferedRides();
     } catch (err: any) {
-      alert(err?.message || "Could not reject negotiation");
+      showToast(err?.message || "Could not reject negotiation", "error");
     }
   };
 
@@ -466,12 +495,12 @@ export default function EmployeeDashboard() {
     try {
       const { apiAcceptJoinRequest, apiGetMyTrips } = await import("../lib/api");
       await apiAcceptJoinRequest(rideId, requestId);
-      alert("Join request accepted! Trip created.");
+      showToast("Join request accepted! Trip created. 🎉", "success");
       loadOfferedRides();
       const fresh = await apiGetMyTrips();
       setTrips(fresh.map(mapTrip));
     } catch (err: any) {
-      alert(err?.message || "Could not accept join request");
+      showToast(err?.message || "Could not accept join request", "error");
     }
   };
 
@@ -479,9 +508,10 @@ export default function EmployeeDashboard() {
     try {
       const { apiDeclineJoinRequest } = await import("../lib/api");
       await apiDeclineJoinRequest(rideId, requestId);
+      showToast("Join request declined", "info");
       loadOfferedRides();
     } catch (err: any) {
-      alert(err?.message || "Could not decline join request");
+      showToast(err?.message || "Could not decline join request", "error");
     }
   };
 
@@ -501,10 +531,10 @@ export default function EmployeeDashboard() {
   /* ── OFFER RIDE handlers ── */
   const handleOfferFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!offerVehId) { alert("Please select a vehicle first."); return; }
+    if (!offerVehId) { showToast("Please select a vehicle first.", "warning"); return; }
     const selectedVeh = vehicles.find(v => v.id === offerVehId);
     if (!selectedVeh || selectedVeh.status !== "Verified") {
-      alert("This vehicle is pending organization admin verification. Only verified vehicles can offer rides.");
+      showToast("This vehicle is pending organization admin verification. Only verified vehicles can offer rides.", "warning");
       return;
     }
     setOfferStep("route-confirm");
@@ -530,8 +560,9 @@ export default function EmployeeDashboard() {
       const fresh = await apiGetMyTrips();
       setTrips(fresh.map(mapTrip));
       setActiveMainTab("my-trips");
+      showToast("Ride offer published successfully! 🚗", "success");
     } catch (err: any) {
-      alert(err?.message || "Failed to publish ride. Please try again.");
+      showToast(err?.message || "Failed to publish ride. Please try again.", "error");
     } finally {
       setOfferLoading(false);
     }
@@ -567,6 +598,7 @@ export default function EmployeeDashboard() {
       setTrackingTripId(trip.id);
       const fresh = await apiGetMyTrips();
       setTrips(fresh.map(mapTrip));
+      showToast("OTP verified! Ride in progress. 🚗", "success");
     } catch (err: any) {
       setOtpError(err?.message || "Invalid OTP");
     } finally {
@@ -583,7 +615,8 @@ export default function EmployeeDashboard() {
       setTrackingTripId(null);
       const fresh = await apiGetMyTrips();
       setTrips(fresh.map(mapTrip));
-    } catch (err: any) { alert(err?.message || "Could not end ride"); }
+      showToast("Ride completed! Proceed to payment.", "success");
+    } catch (err: any) { showToast(err?.message || "Could not end ride", "error"); }
   };
 
   /* ── Payment ── */
@@ -597,14 +630,16 @@ export default function EmployeeDashboard() {
         await apiUpdateTripStatus(paymentTrip.id, "COMPLETED").catch(() => {});
         setTrips(prev => prev.map(t => t.id === paymentTrip!.id ? { ...t, status: "COMPLETED" } : t));
         setPaymentTrip(null);
+        showToast("Payment recorded via Cash!", "success");
       } else {
         const { apiPayForTrip } = await import("../lib/api");
         const res = await apiPayForTrip(paymentTrip.id, payMethod);
         if (res.trip) setTrips(prev => prev.map(t => t.id === paymentTrip!.id ? { ...t, status: res.trip.status } : t));
         if (payMethod === "WALLET") setWalletBalance(prev => prev - paymentTrip!.fareAmount);
         setPaymentTrip(null);
+        showToast(`Payment successful via ${payMethod}!`, "success");
       }
-    } catch (err: any) { alert(err?.message || "Payment failed"); }
+    } catch (err: any) { showToast(err?.message || "Payment failed", "error"); }
     finally { setPayLoading(false); }
   };
 
@@ -613,7 +648,7 @@ export default function EmployeeDashboard() {
     e.preventDefault();
     if (!newModel || !newPlate) return;
     if (!newLicenseFile) {
-      alert("Please upload your Driving License document to complete vehicle registration.");
+      showToast("Please upload your Driving License document to complete vehicle registration.", "warning");
       return;
     }
     setVehLoading(true);
@@ -636,8 +671,8 @@ export default function EmployeeDashboard() {
         status: "Pending",
       }]);
       if (!offerVehId) setOfferVehId(created.id);
-      alert("Vehicle registered successfully! It is now under review by your organization admin.");
-    } catch (err: any) { alert(err?.message || "Could not register vehicle"); }
+      showToast("Vehicle registered! Pending organization admin review.", "success");
+    } catch (err: any) { showToast(err?.message || "Could not register vehicle", "error"); }
     finally {
       setVehLoading(false);
       setNewModel("");
@@ -1037,8 +1072,15 @@ export default function EmployeeDashboard() {
               }} className="text-xs font-mono font-bold underline text-[#173300]">Refresh</button>
             </div>
 
+            {(tripsLoading || offeredLoading) && (
+              <div className="flex flex-col gap-6 my-4">
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
+            )}
+
             {/* ── Driver Offered Rides & Active Bargains Section ── */}
-            {offeredRides.length > 0 && (
+            {!offeredLoading && offeredRides.length > 0 && (
               <div className="flex flex-col gap-6 max-w-4xl w-full mx-auto">
                 <div className="flex justify-between items-center border-b-2 border-[#173300] pb-2">
                   <h2 className="font-heading text-2xl font-extrabold text-[#173300]">
@@ -1221,7 +1263,7 @@ export default function EmployeeDashboard() {
               </div>
             )}
 
-            {trips.length === 0 && offeredRides.length === 0 && (
+            {!tripsLoading && !offeredLoading && trips.length === 0 && offeredRides.length === 0 && (
               <div className="text-center py-16">
                 <h3 className="font-heading text-xl font-extrabold text-[#173300]">No trips or offered rides yet</h3>
                 <p className="text-xs text-[#173300]/60 mt-2">Find or offer a ride to get started.</p>

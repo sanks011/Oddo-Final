@@ -3,6 +3,7 @@ import "./globals.css";
 import AgentationWrapper from "./components/AgentationWrapper";
 import { AuthProvider } from "./context/AuthContext";
 import { AppProvider } from "./context/AppContext";
+import { ToastProvider } from "./components/Toast";
 
 export const metadata: Metadata = {
   title: "Neko-ber — Smart Carpooling with Fare Negotiation",
@@ -30,7 +31,9 @@ export default function RootLayout({
       >
         <AuthProvider>
           <AppProvider>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
           </AppProvider>
         </AuthProvider>
         <AgentationWrapper />
