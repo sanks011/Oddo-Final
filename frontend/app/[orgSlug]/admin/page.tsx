@@ -4,7 +4,7 @@ import { useState, use, useEffect } from "react";
 import Link from "next/link";
 import { useApp, Vehicle } from "../../context/AppContext";
 import type { UserData, VehicleData, OrgData } from "../../lib/api";
-import { API_BASE_URL } from "../../lib/api";
+import { getIdProofUrl, API_BASE_URL } from "../../lib/api";
 
 type AdminTab =
   | "overview"
@@ -450,7 +450,7 @@ export default function OrgAdminDashboard({
                           </div>
                         </div>
                         <a
-                          href={`${API_BASE_URL}/users/${app.id}/id-proof`}
+                          href={getIdProofUrl(app.id)}
                           target="_blank"
                           rel="noreferrer"
                           className="px-3 py-1 bg-[#173300] text-[#FFEB5B] text-[11px] font-mono font-bold rounded-md hover:opacity-90 inline-block"

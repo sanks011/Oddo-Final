@@ -294,7 +294,9 @@ export async function apiRejectUser(userId: string, rejectionReason: string) {
 }
 
 export function getIdProofUrl(userId: string): string {
-  return `${API_BASE_URL}/users/${userId}/id-proof`;
+  const token = getAccessToken();
+  const query = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${API_BASE_URL}/users/${userId}/id-proof${query}`;
 }
 
 /* ════════════════════════════════════════════════════
