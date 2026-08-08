@@ -165,13 +165,19 @@ export default function EmployeeDashboard() {
       const list = await apiGetNegotiations(rideId);
       if (Array.isArray(list) && list.length > 0) {
         const neg = list[0];
-        const offers = neg.offers || [];
-        const formattedHistory = offers.map(o => ({
+        // Sort offers by createdAt timestamp ascending to ensure exact chronological order
+        const sortedOffers = [...(neg.offers || [])].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        
+        // Show newest offers at top of history log
+        const formattedHistory = [...sortedOffers].reverse().map(o => ({
           by: o.offeredBy === "PASSENGER" ? "You" : "Driver",
           amount: Number(o.amount),
           time: new Date(o.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
         }));
-        const lastOffer = offers[offers.length - 1];
+
+        const lastOffer = sortedOffers[sortedOffers.length - 1];
         const latestAmt = lastOffer ? Number(lastOffer.amount) : 0;
         const lastBy = lastOffer ? lastOffer.offeredBy : null;
 
