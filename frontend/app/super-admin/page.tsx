@@ -58,7 +58,7 @@ export default function SuperAdminPage() {
     setSaLoading(true);
 
     try {
-      const { apiLogin, setTokens } = await import("../lib/api");
+      const { apiLogin } = await import("../lib/api");
       const res = await apiLogin(saId, saPassword);
       if (res.user.role !== "SUPER_ADMIN") {
         setSaError("This account does not have Super Admin privileges.");
@@ -117,7 +117,7 @@ export default function SuperAdminPage() {
     createdAt: new Date().toISOString().split("T")[0],
     employeeCount: ro._count?.users ?? 0,
     vehicleCount: 0,
-    status: (ro.status === "SUSPENDED" ? "Suspended" : ro.status === "PENDING" ? "Pending Setup" : "Active") as any,
+    status: (ro.status === "SUSPENDED" ? "Suspended" : ro.status === "PENDING_SETUP" || ro.status === "PENDING" ? "Pending Setup" : "Active") as any,
   }));
 
   const activeOrgsList = orgsLoaded ? mappedRealOrgs : [];
@@ -188,7 +188,7 @@ export default function SuperAdminPage() {
     if (editingOrgId) {
       // ── EDIT EXISTING ORGANIZATION ──
       try {
-        const { apiUpdateOrganization, getAccessToken, apiLogin } = await import("../lib/api");
+        const { apiUpdateOrganization, apiProvisionOrgAdmin, getAccessToken, apiLogin } = await import("../lib/api");
 
         if (!getAccessToken()) {
           try {
@@ -200,6 +200,16 @@ export default function SuperAdminPage() {
           name: orgName.trim(),
           status: editingOrgStatus.toUpperCase(),
         }).catch(() => {});
+
+        if (adminId.trim() && adminPassword.trim()) {
+          await apiProvisionOrgAdmin(editingOrgId, {
+            email: adminId.trim(),
+            password: adminPassword.trim(),
+            firstName: orgName.split(" ")[0] || "Org",
+            lastName: "Admin",
+            phone: "+1000000000",
+          }).catch(() => {});
+        }
       } catch (err: any) {
         console.error("Edit org error:", err);
       }
@@ -800,37 +810,42 @@ export default function SuperAdminPage() {
                   </p>
                 </div>
 
-                {/* Generated Details Card */}
-                <div className="w-full bg-[#173300]/[0.04] border-2 border-dashed border-[#B6B6B6] rounded-2xl p-4 text-left font-mono text-xs flex flex-col gap-2">
+                <div className="w-full bg-[#173300] text-[#FCFAF5] rounded-2xl p-5 text-left border-2 border-[#173300] shadow-[4px_4px_0px_#FFEB5B] flex flex-col gap-3 font-mono text-xs">
                   <div>
-                    <span className="text-[#173300]/50 uppercase">Org Admin Login Route:</span>
-                    <div className="font-bold text-[#173300] mt-0.5 bg-[#FCFAF5] p-2 rounded-lg border border-[#B6B6B6]">
-                      /{createdSlug}/admin/login
+                    <span className="text-[#FFEB5B] text-[10px] uppercase font-bold tracking-wider">
+                      Org Login Link:
+                    </span>
+                    <div className="truncate text-white font-bold underline mt-0.5">
+                      /{createdSlug || orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}/admin/login
                     </div>
                   </div>
-                  <div>
-                    <span className="text-[#173300]/50 uppercase">Admin ID:</span>
-                    <div className="font-bold text-[#173300] mt-0.5">{adminId}</div>
-                  </div>
-                  <div>
-                    <span className="text-[#173300]/50 uppercase">Password:</span>
-                    <div className="font-bold text-[#173300] mt-0.5">{adminPassword}</div>
+
+                  <div className="pt-2 border-t border-dashed border-white/20 grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-white/60 text-[10px] uppercase">Admin ID:</span>
+                      <div className="font-bold truncate text-[#FFEB5B]">{adminId}</div>
+                    </div>
+                    <div>
+                      <span className="text-white/60 text-[10px] uppercase">Password:</span>
+                      <div className="font-bold truncate text-[#FFEB5B]">{adminPassword}</div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 w-full pt-2">
+                <div className="flex items-center gap-3 w-full">
                   <button
-                    onClick={() => copyLoginUrl(createdSlug)}
-                    className="flex-1 py-2.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] text-xs font-semibold text-[#173300] hover:bg-[#FFEB5B] transition-colors"
+                    onClick={() => copyLoginUrl(createdSlug || orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}
+                    className="flex-1 py-3 rounded-xl border-2 border-[#173300] bg-[#FFEB5B] text-[#173300] font-semibold text-xs shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                   >
-                    {copiedLink ? "Link Copied!" : "Copy Login Link"}
+                    {copiedLink ? "✓ Copied!" : "Copy Admin Login URL"}
                   </button>
-                  <Link
-                    href={`/${createdSlug}/admin/login`}
-                    className="flex-1 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] text-xs font-semibold border-2 border-[#173300] shadow-[3px_3px_0px_#173300] text-center"
+
+                  <button
+                    onClick={resetModal}
+                    className="py-3 px-5 rounded-xl bg-[#173300] text-[#FFEB5B] font-semibold text-xs border-2 border-[#173300] shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                   >
-                    Go to Admin Portal →
-                  </Link>
+                    Done
+                  </button>
                 </div>
               </div>
             )}
