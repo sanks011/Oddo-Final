@@ -1242,13 +1242,45 @@ export default function EmployeeDashboard() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-mono font-bold uppercase text-[#173300]">Your Offer</label>
-              <div className="flex items-center gap-3">
-                <button onClick={() => setBargainAmount(Math.max(10, bargainAmount - 10))} className="w-10 h-10 rounded-xl border-2 border-[#173300] font-extrabold hover:bg-[#FFEB5B]">−₹10</button>
-                <button onClick={() => setBargainAmount(Math.max(10, bargainAmount - 5))} className="w-10 h-10 rounded-xl border-2 border-[#173300] font-extrabold hover:bg-[#FFEB5B]">−₹5</button>
-                <div className="flex-1 text-center font-heading text-3xl font-extrabold text-[#173300]">₹{bargainAmount}</div>
-                <button onClick={() => setBargainAmount(bargainAmount + 5)} className="w-10 h-10 rounded-xl border-2 border-[#173300] font-extrabold hover:bg-[#FFEB5B]">+₹5</button>
-                <button onClick={() => setBargainAmount(bargainAmount + 10)} className="w-10 h-10 rounded-xl border-2 border-[#173300] font-extrabold hover:bg-[#FFEB5B]">+₹10</button>
+              <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#173300]/70">Your Offer</label>
+              <div className="flex items-center justify-between gap-2 bg-[#173300]/[0.02] p-3 rounded-2xl border-2 border-dashed border-[#B6B6B6]">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setBargainAmount(Math.max(10, bargainAmount - 10))}
+                    className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
+                  >
+                    -₹10
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBargainAmount(Math.max(10, bargainAmount - 5))}
+                    className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
+                  >
+                    -₹5
+                  </button>
+                </div>
+
+                <div className="font-heading text-3xl font-extrabold text-[#173300] px-2 text-center min-w-[80px]">
+                  ₹{bargainAmount}
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setBargainAmount(bargainAmount + 5)}
+                    className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
+                  >
+                    +₹5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBargainAmount(bargainAmount + 10)}
+                    className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
+                  >
+                    +₹10
+                  </button>
+                </div>
               </div>
             </div>
 

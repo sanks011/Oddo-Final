@@ -705,7 +705,7 @@ export default function OrgAdminDashboard({
                             </div>
                           </div>
                           <a
-                            href={getIdProofUrl ? `${API_BASE_URL}/vehicles/${veh.id}/license?token=${encodeURIComponent(typeof window !== 'undefined' && localStorage.getItem('oddo_access_token') || '')}` : '#'}
+                            href={`${API_BASE_URL}/vehicles/${veh.id}/license?token=${encodeURIComponent((typeof window !== 'undefined' && localStorage.getItem('oddo_access_token')) || '')}`}
                             target="_blank"
                             rel="noreferrer"
                             className="px-3 py-1 bg-[#173300] text-[#FFEB5B] text-[11px] font-mono font-bold rounded-md hover:opacity-90 inline-block"
