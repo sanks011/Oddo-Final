@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import type { Socket } from "socket.io-client";
 import { useAuth } from "../context/AuthContext";
 import LocationInput from "../components/LocationInput";
 
@@ -126,7 +127,7 @@ export default function EmployeeDashboard() {
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const locationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const socketRef = useRef<import("socket.io-client").Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   /* Payment */
   const [paymentTrip, setPaymentTrip] = useState<Trip | null>(null);
@@ -155,6 +156,24 @@ export default function EmployeeDashboard() {
   const [chatOpenTrip, setChatOpenTrip] = useState<Trip | null>(null);
   const [chatMessages, setChatMessages] = useState<Array<{ sender: string; text: string; time: string }>>([]);
   const [chatText, setChatText] = useState("");
+
+  /* Offered Rides & Driver Bargains */
+  const [offeredRides, setOfferedRides] = useState<any[]>([]);
+  const [driverCounterInputs, setDriverCounterInputs] = useState<Record<string, number>>({});
+
+  const loadOfferedRides = async () => {
+    try {
+      const { apiGetMyOfferedRides } = await import("../lib/api");
+      const offers = await apiGetMyOfferedRides();
+      setOfferedRides(offers);
+      offers.forEach((r) => {
+        try {
+          const { joinRideRoom } = require("../lib/socket");
+          joinRideRoom(r.id);
+        } catch {}
+      });
+    } catch {}
+  };
 
   /* ── Load backend data on mount ── */
   useEffect(() => {
@@ -197,6 +216,7 @@ export default function EmployeeDashboard() {
         if (places.status === "fulfilled" && places.value.length > 0) {
           setSavedPlaces(places.value.map(p => ({ id: p.id, label: p.label, address: p.address })));
         }
+        loadOfferedRides();
       } catch { /* graceful fail */ }
     };
     load();
@@ -251,6 +271,12 @@ export default function EmployeeDashboard() {
         if (data.tripId === trackingTripId) {
           setTrips(prev => prev.map(t => t.id === data.tripId ? { ...t, status: "IN_PROGRESS" } : t));
         }
+      });
+      sock.on("negotiation:offer", () => {
+        loadOfferedRides();
+      });
+      sock.on("negotiation:accepted", () => {
+        loadOfferedRides();
       });
     };
     setupSocket();
@@ -366,6 +392,7 @@ export default function EmployeeDashboard() {
         history: [...prev.history, { by: "You", amount: bargainAmount, time: new Date().toLocaleTimeString() }],
       } : null);
     } catch (err: any) {
+      alert(err?.message || "Could not send offer");
       setSearchError(err?.message || "Could not send offer");
     }
   };
@@ -383,7 +410,74 @@ export default function EmployeeDashboard() {
       const { apiGetMyTrips } = await import("../lib/api");
       const fresh = await apiGetMyTrips();
       setTrips(fresh.map(mapTrip));
-    } catch (err: any) { setSearchError(err?.message || "Failed to accept negotiation"); }
+    } catch (err: any) {
+      alert(err?.message || "Failed to accept negotiation");
+      setSearchError(err?.message || "Failed to accept negotiation");
+    }
+  };
+
+  const handleDriverCounterOffer = async (rideId: string, negId: string) => {
+    const amount = driverCounterInputs[negId];
+    if (!amount || amount <= 0) {
+      alert("Please enter a valid counter offer amount.");
+      return;
+    }
+    try {
+      const { apiCounterOffer } = await import("../lib/api");
+      const { emitNegotiationOffer } = await import("../lib/socket");
+      await apiCounterOffer(rideId, negId, amount);
+      emitNegotiationOffer(rideId, negId, amount, "DRIVER");
+      alert(`Counter offer of ₹${amount} sent to passenger!`);
+      loadOfferedRides();
+    } catch (err: any) {
+      alert(err?.message || "Could not send counter offer");
+    }
+  };
+
+  const handleDriverAcceptNegotiation = async (rideId: string, negId: string, agreedFare: number) => {
+    try {
+      const { apiAcceptNegotiation } = await import("../lib/api");
+      const { emitNegotiationAccept } = await import("../lib/socket");
+      await apiAcceptNegotiation(rideId, negId);
+      emitNegotiationAccept(rideId, negId, agreedFare);
+      alert(`Accepted passenger's offer of ₹${agreedFare}! The passenger can now proceed to book.`);
+      loadOfferedRides();
+    } catch (err: any) {
+      alert(err?.message || "Could not accept negotiation");
+    }
+  };
+
+  const handleDriverRejectNegotiation = async (rideId: string, negId: string) => {
+    try {
+      const { apiRejectNegotiation } = await import("../lib/api");
+      await apiRejectNegotiation(rideId, negId);
+      loadOfferedRides();
+    } catch (err: any) {
+      alert(err?.message || "Could not reject negotiation");
+    }
+  };
+
+  const handleAcceptDriverJoinRequest = async (rideId: string, requestId: string) => {
+    try {
+      const { apiAcceptJoinRequest, apiGetMyTrips } = await import("../lib/api");
+      await apiAcceptJoinRequest(rideId, requestId);
+      alert("Join request accepted! Trip created.");
+      loadOfferedRides();
+      const fresh = await apiGetMyTrips();
+      setTrips(fresh.map(mapTrip));
+    } catch (err: any) {
+      alert(err?.message || "Could not accept join request");
+    }
+  };
+
+  const handleDeclineDriverJoinRequest = async (rideId: string, requestId: string) => {
+    try {
+      const { apiDeclineJoinRequest } = await import("../lib/api");
+      await apiDeclineJoinRequest(rideId, requestId);
+      loadOfferedRides();
+    } catch (err: any) {
+      alert(err?.message || "Could not decline join request");
+    }
   };
 
   /* ── BOOK NOW (at listed price) ── */
@@ -929,17 +1023,202 @@ export default function EmployeeDashboard() {
         {activeMainTab === "my-trips" && (
           <div className="flex flex-col gap-6">
             <div className="flex items-center justify-between border-b-2 border-dashed border-[#B6B6B6] pb-4">
-              <h1 className="font-heading text-3xl font-extrabold text-[#173300]">My Trips</h1>
+              <h1 className="font-heading text-3xl font-extrabold text-[#173300]">My Trips &amp; Offered Rides</h1>
               <button onClick={async () => {
                 const { apiGetMyTrips } = await import("../lib/api");
                 const fresh = await apiGetMyTrips().catch(() => []);
                 setTrips(fresh.map(mapTrip));
+                loadOfferedRides();
               }} className="text-xs font-mono font-bold underline text-[#173300]">Refresh</button>
             </div>
 
-            {trips.length === 0 && (
+            {/* ── Driver Offered Rides & Active Bargains Section ── */}
+            {offeredRides.length > 0 && (
+              <div className="flex flex-col gap-6 max-w-4xl w-full mx-auto">
+                <div className="flex justify-between items-center border-b-2 border-[#173300] pb-2">
+                  <h2 className="font-heading text-2xl font-extrabold text-[#173300]">
+                    🚗 My Offered Rides &amp; Active Bargains ({offeredRides.length})
+                  </h2>
+                </div>
+
+                <div className="space-y-6">
+                  {offeredRides.map((ride) => {
+                    const activeNegs = ride.negotiations || [];
+                    const pendingReqs = ride.joinRequests || [];
+                    return (
+                      <div
+                        key={ride.id}
+                        className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col gap-4"
+                      >
+                        {/* Ride Header */}
+                        <div className="flex justify-between items-start border-b border-dashed border-[#B6B6B6] pb-3">
+                          <div>
+                            <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">
+                              {ride.vehicle?.model || "Vehicle"} ({ride.vehicle?.registrationNumber || ""})
+                            </span>
+                            <h3 className="font-heading text-xl font-extrabold text-[#173300] mt-1">
+                              {ride.pickupLabel} → {ride.destinationLabel}
+                            </h3>
+                            <div className="text-xs font-mono text-[#173300]/60 mt-0.5">
+                              Departure: {new Date(ride.departureAt).toLocaleString()}
+                            </div>
+                          </div>
+
+                          <div className="text-right font-mono">
+                            <div className="text-xs text-[#173300]/60">Listed Fare</div>
+                            <div className="font-extrabold text-lg text-[#173300]">₹{ride.farePerSeat} / seat</div>
+                            <div className="text-[10px] text-[#173300]/60">{ride.availableSeats} seats left</div>
+                          </div>
+                        </div>
+
+                        {/* Incoming Price Bargains */}
+                        {activeNegs.length > 0 && (
+                          <div className="bg-[#FFEB5B]/20 border-2 border-[#173300] rounded-2xl p-4 flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-heading text-base font-extrabold text-[#173300]">
+                                💬 Incoming Price Bargains ({activeNegs.length})
+                              </h4>
+                              <span className="text-[10px] font-mono font-bold bg-[#173300] text-[#FFEB5B] px-2 py-0.5 rounded-full">
+                                Action Required
+                              </span>
+                            </div>
+
+                            <div className="space-y-3">
+                              {activeNegs.map((neg: any) => {
+                                const passName = neg.passenger
+                                  ? `${neg.passenger.firstName} ${neg.passenger.lastName}`
+                                  : "Passenger";
+                                const latestOffer = neg.offers?.[0];
+                                const isPassengerTurn = latestOffer?.offeredBy === "PASSENGER";
+
+                                return (
+                                  <div
+                                    key={neg.id}
+                                    className="bg-[#FCFAF5] border border-[#173300] rounded-xl p-3.5 flex flex-col gap-3"
+                                  >
+                                    <div className="flex justify-between items-center font-mono text-xs">
+                                      <div>
+                                        <span className="font-bold text-sm text-[#173300]">{passName}</span>
+                                        <span className="text-[#173300]/60 text-[11px] block">{neg.passenger?.email}</span>
+                                      </div>
+
+                                      <div className="text-right">
+                                        <span className="text-[10px] text-[#173300]/60 block uppercase">Latest Offer</span>
+                                        <span className="font-extrabold text-base text-[#173300]">₹{latestOffer?.amount || ride.farePerSeat}</span>
+                                        <span className="text-[10px] text-[#173300]/60 block font-semibold">
+                                          By {latestOffer?.offeredBy === "PASSENGER" ? "Passenger" : "You"}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Action row for Driver */}
+                                    {isPassengerTurn ? (
+                                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1 border-t border-dashed border-[#B6B6B6]">
+                                        <button
+                                          onClick={() => handleDriverAcceptNegotiation(ride.id, neg.id, latestOffer.amount)}
+                                          className="px-4 py-2 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[2px_2px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px]"
+                                        >
+                                          Accept ₹{latestOffer.amount}
+                                        </button>
+
+                                        <div className="flex flex-1 items-center gap-1.5">
+                                          <input
+                                            type="number"
+                                            placeholder={`Counter ₹ (e.g. ${latestOffer.amount + 20})`}
+                                            value={driverCounterInputs[neg.id] || ""}
+                                            onChange={(e) =>
+                                              setDriverCounterInputs((prev) => ({
+                                                ...prev,
+                                                [neg.id]: Number(e.target.value),
+                                              }))
+                                            }
+                                            className="w-full px-3 py-1.5 rounded-xl border-2 border-dashed border-[#B6B6B6] bg-[#FCFAF5] font-mono text-xs font-bold outline-none"
+                                          />
+                                          <button
+                                            onClick={() => handleDriverCounterOffer(ride.id, neg.id)}
+                                            className="px-3 py-2 rounded-xl bg-[#FFEB5B] text-[#173300] font-bold text-xs border border-[#173300] hover:bg-[#FFEB5B]/80"
+                                          >
+                                            Counter
+                                          </button>
+                                        </div>
+
+                                        <button
+                                          onClick={() => handleDriverRejectNegotiation(ride.id, neg.id)}
+                                          className="px-3 py-2 rounded-xl border border-red-300 text-red-700 font-bold text-xs hover:bg-red-50"
+                                        >
+                                          Decline
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs font-mono text-[#173300]/60 italic bg-[#173300]/[0.03] p-2 rounded-lg text-center">
+                                        Waiting for passenger response to your counter offer of ₹{latestOffer?.amount}…
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Incoming Join Requests */}
+                        {pendingReqs.length > 0 && (
+                          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 flex flex-col gap-3">
+                            <h4 className="font-heading text-base font-extrabold text-blue-900">
+                              📋 Pending Join Requests ({pendingReqs.length})
+                            </h4>
+
+                            <div className="space-y-2">
+                              {pendingReqs.map((req: any) => {
+                                const passName = req.passenger
+                                  ? `${req.passenger.firstName} ${req.passenger.lastName}`
+                                  : "Passenger";
+                                return (
+                                  <div
+                                    key={req.id}
+                                    className="bg-white border border-blue-200 rounded-xl p-3 flex justify-between items-center font-mono text-xs"
+                                  >
+                                    <div>
+                                      <div className="font-bold text-sm text-[#173300]">{passName}</div>
+                                      <div className="text-[#173300]/60 text-[11px]">{req.seatsRequested} seat(s) at ₹{req.agreedFare} / seat</div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => handleDeclineDriverJoinRequest(ride.id, req.id)}
+                                        className="px-3 py-1.5 rounded-lg border border-red-300 text-red-700 font-bold text-xs hover:bg-red-50"
+                                      >
+                                        Decline
+                                      </button>
+                                      <button
+                                        onClick={() => handleAcceptDriverJoinRequest(ride.id, req.id)}
+                                        className="px-4 py-1.5 rounded-lg bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[2px_2px_0px_#173300]"
+                                      >
+                                        Accept Request
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {activeNegs.length === 0 && pendingReqs.length === 0 && (
+                          <div className="text-xs font-mono text-[#173300]/50 text-center py-2">
+                            No active bargains or pending requests for this ride yet.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {trips.length === 0 && offeredRides.length === 0 && (
               <div className="text-center py-16">
-                <h3 className="font-heading text-xl font-extrabold text-[#173300]">No trips yet</h3>
+                <h3 className="font-heading text-xl font-extrabold text-[#173300]">No trips or offered rides yet</h3>
                 <p className="text-xs text-[#173300]/60 mt-2">Find or offer a ride to get started.</p>
                 <button onClick={() => setActiveMainTab("carpooling")} className="mt-6 px-6 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">Go to Dashboard</button>
               </div>

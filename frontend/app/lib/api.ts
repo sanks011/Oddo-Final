@@ -812,3 +812,33 @@ export async function apiGetTripOtp(tripId: string) {
   return fetchApi<{ otp: string }>(`/trips/${tripId}/otp`);
 }
 
+export async function apiGetMyOfferedRides() {
+  return fetchApi<Array<{
+    id: string;
+    pickupLabel: string;
+    destinationLabel: string;
+    departureAt: string;
+    availableSeats: number;
+    farePerSeat: number;
+    status: string;
+    vehicle: any;
+    negotiations: Array<{
+      id: string;
+      rideId: string;
+      passengerId: string;
+      status: string;
+      passenger: { id: string; firstName: string; lastName: string; email: string; phone?: string };
+      offers: Array<{ id: string; offeredBy: "PASSENGER" | "DRIVER"; amount: number; createdAt: string }>;
+    }>;
+    joinRequests: Array<{
+      id: string;
+      rideId: string;
+      passengerId: string;
+      agreedFare: number;
+      seatsRequested: number;
+      status: string;
+      passenger: { id: string; firstName: string; lastName: string; email: string; phone?: string };
+    }>;
+  }>>("/rides/my-offers");
+}
+
