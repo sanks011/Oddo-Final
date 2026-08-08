@@ -18,11 +18,21 @@ export function getAccessToken(): string | null {
   );
 }
 
+export function getRefreshToken(): string | null {
+  if (typeof document === "undefined") return null;
+  return (
+    document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("refresh-token="))
+      ?.split("=")[1] || null
+  );
+}
+
 export function setTokens(accessToken: string, refreshToken?: string) {
   if (typeof document === "undefined") return;
-  document.cookie = `access-token=${accessToken}; path=/; max-age=${60 * 60 * 24 * 7}`;
+  document.cookie = `access-token=${accessToken}; path=/; max-age=${60 * 60 * 24 * 30}`;
   if (refreshToken) {
-    document.cookie = `refresh-token=${refreshToken}; path=/; max-age=${60 * 60 * 24 * 30}`;
+    document.cookie = `refresh-token=${refreshToken}; path=/; max-age=${60 * 60 * 24 * 90}`;
   }
 }
 
@@ -40,7 +50,7 @@ async function fetchApi<T>(
   options: RequestInit = {},
   customToken?: string
 ): Promise<T> {
-  const token = customToken ?? getAccessToken();
+  let token = customToken ?? getAccessToken();
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
   };
@@ -52,10 +62,35 @@ async function fetchApi<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  let response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
   });
+
+  // Silent automatic refresh if access token expired (401)
+  if (response.status === 401 && !endpoint.includes("/auth/")) {
+    const refToken = getRefreshToken();
+    if (refToken) {
+      try {
+        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken: refToken }),
+        });
+        if (refreshRes.ok) {
+          const refData = await refreshRes.json();
+          if (refData.accessToken) {
+            setTokens(refData.accessToken);
+            headers["Authorization"] = `Bearer ${refData.accessToken}`;
+            response = await fetch(`${API_BASE_URL}${endpoint}`, {
+              ...options,
+              headers,
+            });
+          }
+        }
+      } catch {}
+    }
+  }
 
   const text = await response.text();
   let data: any;
