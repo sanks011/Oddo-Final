@@ -531,6 +531,7 @@ export default function EmployeeDashboard() {
       history: [],
     });
     setBargainAmount(ride.farePerSeat - 10);
+    refreshNegotiationData(ride.id);
   };
 
   const handleSendOffer = async () => {
