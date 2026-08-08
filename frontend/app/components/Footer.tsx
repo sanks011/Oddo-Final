@@ -10,10 +10,10 @@ export default function Footer() {
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between border-b border-[#173300] pb-10">
           <div className="space-y-2">
             <h3 className="font-heading text-2xl sm:text-4xl font-extrabold text-[#173300]">
-              Stay in the loop with SayBriefly &amp; Carpool.
+              Stay in the loop with SayBriefly &amp; OddoStock.
             </h3>
             <p className="font-body text-base text-[#173300]/80">
-              Get updates on new integrations, scope creep detection, and inventory management.
+              Get updates on new routes, fare negotiation features, and carpooling tips delivered straight to your inbox.
             </p>
           </div>
 
@@ -49,16 +49,6 @@ export default function Footer() {
                 Privacy Policy
               </Link>
             </li>
-            <li>
-              <Link href="/" className="hover:underline">
-                Cookie Settings
-              </Link>
-            </li>
-            <li>
-              <Link href="/dashboard" className="font-semibold text-[#DD6C3E] hover:underline">
-                Inventory Hub App →
-              </Link>
-            </li>
           </ul>
 
           {/* Social Icons */}
@@ -83,7 +73,7 @@ export default function Footer() {
 
         {/* Copyright Bar with Dashed Borders */}
         <p className="text-center py-5 border-y border-[#173300] border-dashed text-[#173300] text-base font-normal">
-          2026 © SayBriefly &amp; Carpool. All rights reserved. <br className="block md:hidden" />
+          2026 © SayBriefly &amp; OddoStock. All rights reserved. <br className="block md:hidden" />
           Designed by <span className="font-bold">@HustleJar</span>
         </p>
       </div>

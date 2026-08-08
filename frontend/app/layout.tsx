@@ -5,8 +5,8 @@ import { AuthProvider } from "./context/AuthContext";
 import { AppProvider } from "./context/AppContext";
 
 export const metadata: Metadata = {
-  title: "Oddo Stock — Sketchbook-Density Inventory Control",
-  description: "Modern, high-craft inventory management platform built with real-time stock tracking, low-stock warnings, multi-warehouse sync, and SKU analytics.",
+  title: "Neko-ber — Smart Carpooling with Fare Negotiation",
+  description: "Neko-ber connects riders and drivers on the same route. Book a seat, offer your car, and negotiate fares directly. No middlemen, no fixed prices.",
 };
 
 export default function RootLayout({

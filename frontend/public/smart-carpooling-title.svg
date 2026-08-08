@@ -1,0 +1,47 @@
+<svg width="390" height="44" viewBox="0 0 390 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Yellow wobbly background — properly closed path covering full badge area -->
+  <path d="
+    M 6,3
+    C 60,0.5 120,1.8 180,2.5
+    C 240,3.2 300,3.8 350,3.2
+    C 368,3.0 382,3.5 387,5.5
+    C 389,7 389,9 388.5,12
+    C 388,16 388.5,20 388,24
+    C 387.5,29 388,33 387,37
+    C 386,40 383,42.5 379,42.5
+    C 320,43.2 260,42.5 200,42.2
+    C 145,41.9 90,42.8 40,42.5
+    C 22,42.4 8,41.5 4,39
+    C 1.5,37 1,34 1.5,30
+    C 2,24 1.5,17 2,11
+    C 2.5,7 3.5,4.5 6,3
+    Z
+  " fill="#FFEB5B"/>
+
+  <!-- Dark green box overlaid on left portion -->
+  <rect width="66" height="44" rx="4" fill="#173300"/>
+
+  <!-- Smiley icon centered in green box -->
+  <!-- Outer circle -->
+  <circle cx="33" cy="22" r="11" stroke="#FFEB5B" stroke-width="1.5" fill="none"/>
+  <!-- Smile -->
+  <path d="M28.5 26.5c1.5 1.6 8.5 1.6 10 0" stroke="#FFEB5B" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+  <!-- Left star eye -->
+  <polygon points="28,14 28.6,15.7 30.4,15.7 29,16.6 29.5,18.3 28,17.3 26.5,18.3 27,16.6 25.6,15.7 27.4,15.7" fill="#FFEB5B"/>
+  <!-- Right star eye -->
+  <polygon points="38,14 38.6,15.7 40.4,15.7 39,16.6 39.5,18.3 38,17.3 36.5,18.3 37,16.6 35.6,15.7 37.4,15.7" fill="#FFEB5B"/>
+
+  <!-- Text — centered in yellow area, light weight, small -->
+  <text
+    x="228"
+    y="27"
+    text-anchor="middle"
+    font-family="'Inter', 'Helvetica Neue', sans-serif"
+    font-size="13.5"
+    font-weight="300"
+    letter-spacing="0.1"
+    fill="#173300"
+  >Smart Carpooling, Re-Imagined</text>
+
+</svg>
