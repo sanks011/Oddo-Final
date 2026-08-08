@@ -35,7 +35,6 @@ export default function LandingHero() {
           {/* Hero Display Heading */}
           <h1 className="font-heading text-3xl md:text-5xl lg:text-[64px] xl:text-[80px] font-extrabold text-center mt-2 lg:mt-4 text-[#173300] leading-[1.05]">
             Book a ride.{" "}
-            <br className="hidden md:block" />
             Offer a seat.{" "}
             <span className="highlight-wash">Negotiate the fare.</span>
           </h1>
