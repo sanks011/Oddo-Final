@@ -187,17 +187,14 @@ export default function RouteMap({
       {/* Real Map Container */}
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
-      {/* Loading Overlay */}
+      {/* Loading Overlay — spinner only, no text */}
       {loading && (
-        <div className="absolute inset-0 bg-[#FCFAF5]/90 z-20 flex flex-col items-center justify-center gap-3">
+        <div className="absolute inset-0 bg-[#FCFAF5]/80 z-20 flex items-center justify-center">
           <div className="w-8 h-8 border-4 border-[#173300] border-t-transparent rounded-full animate-spin" />
-          <span className="font-mono text-xs font-bold text-[#173300]">
-            Calculating OpenStreetMap Driving Route…
-          </span>
         </div>
       )}
 
-      {/* Live Route Distance Badge Overlay */}
+      {/* Live Route Distance Badge */}
       {routeInfo && !loading && (
         <div className="absolute top-4 left-4 z-10 bg-[#173300] text-[#FFEB5B] border-2 border-[#173300] rounded-xl px-4 py-2 shadow-[3px_3px_0px_#173300] font-mono text-xs font-extrabold flex items-center gap-2">
           <svg className="w-4 h-4 text-[#FFEB5B]" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -208,12 +205,6 @@ export default function RouteMap({
           </span>
         </div>
       )}
-
-      {/* Map Provider Badge Overlay */}
-      <div className="absolute top-4 right-4 z-10 bg-[#FCFAF5] border-2 border-[#173300] text-[#173300] rounded-xl px-3 py-1.5 shadow-[2px_2px_0px_#173300] font-mono text-[11px] font-bold flex items-center gap-1.5">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span>OpenStreetMap + OSRM Live</span>
-      </div>
     </div>
   );
 }
