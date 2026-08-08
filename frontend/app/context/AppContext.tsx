@@ -304,6 +304,7 @@ const AppContext = createContext<AppContextValue>({
   addVehicle: () => {},
   updateVehicleStatus: () => {},
   updateOrgConfig: () => {},
+  updateOrganization: () => {},
 });
 
 export function AppProvider({ children }: { children: React.ReactNode }) {

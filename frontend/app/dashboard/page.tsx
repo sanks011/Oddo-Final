@@ -831,24 +831,14 @@ export default function EmployeeDashboard() {
                       </button>
                     </div>
 
-                    <div className="w-full h-80 bg-[#173300] border-2 border-[#173300] rounded-2xl relative overflow-hidden flex flex-col justify-between p-6">
-                      <span className="bg-[#FFEB5B] text-[#173300] font-mono text-xs font-bold px-3 py-1 rounded-full w-fit">
-                        Route: 26 km • 33 min
-                      </span>
+                    <RouteMap startAddress={offerStartLoc} destAddress={offerDestLoc} />
 
-                      <div className="flex justify-between items-center text-[#FFEB5B] font-mono font-bold text-sm z-10 px-8">
-                        <div>Pickup: {offerStartLoc}</div>
-                        <div>→</div>
-                        <div>Drop: {offerDestLoc}</div>
-                      </div>
-
-                      <button
-                        onClick={handleConfirmOfferPublish}
-                        className="w-full py-4 rounded-2xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-lg border-2 border-[#173300] shadow-[4px_4px_0px_#173300]"
-                      >
-                        Publish Ride Offer
-                      </button>
-                    </div>
+                    <button
+                      onClick={handleConfirmOfferPublish}
+                      className="w-full py-4 rounded-2xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-lg border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                    >
+                      Publish Ride Offer
+                    </button>
                   </div>
                 )}
               </>

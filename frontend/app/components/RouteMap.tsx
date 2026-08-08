@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import "leaflet/dist/leaflet.css";
 
 interface RouteMapProps {
   startAddress: string;
@@ -31,7 +32,6 @@ export default function RouteMap({
 
       // Load Leaflet dynamically client-side
       const L = (await import("leaflet")).default;
-      await import("leaflet/dist/leaflet.css");
 
       if (!mapContainerRef.current) return;
 
