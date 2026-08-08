@@ -898,11 +898,16 @@ export default function EmployeeDashboard() {
   const needsPayment = (t: Trip) => ["COMPLETED", "TRIP_COMPLETED", "PAYMENT_PENDING"].includes(t.status);
   const activeTrips = trips.filter(isActiveTrip);
 
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#FCFAF5] text-[#173300] flex flex-col font-sans" suppressHydrationWarning>
       {/* ── Header ── */}
-      <header className="border-b-2 border-[#173300] bg-[#FCFAF5] sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-6">
+      <header className="border-b-2 border-[#173300] bg-[#FCFAF5] sticky top-0 z-40 shadow-sm" suppressHydrationWarning>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-6" suppressHydrationWarning>
           <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0">
             <img src="/logo.svg" alt="Oddo Logo" className="h-8 w-auto" />
             <span className="font-heading font-extrabold text-2xl text-[#173300] tracking-tight">Carpooling</span>
@@ -917,12 +922,12 @@ export default function EmployeeDashboard() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-2 bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl px-3 py-1.5 shadow-[2px_2px_0px_#173300] font-mono text-xs font-bold text-[#173300]">
-              <div className="w-6 h-6 rounded-full bg-[#FFEB5B] border border-[#173300] flex items-center justify-center font-extrabold text-xs">
-                {user?.firstName?.charAt(0) || "U"}
+          <div className="flex items-center gap-2 shrink-0" suppressHydrationWarning>
+            <div className="flex items-center gap-2 bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl px-3 py-1.5 shadow-[2px_2px_0px_#173300] font-mono text-xs font-bold text-[#173300]" suppressHydrationWarning>
+              <div className="w-6 h-6 rounded-full bg-[#FFEB5B] border border-[#173300] flex items-center justify-center font-extrabold text-xs" suppressHydrationWarning>
+                {hasMounted && user?.firstName ? user.firstName.charAt(0) : "U"}
               </div>
-              <span className="hidden sm:inline">{user ? `${user.firstName} ${user.lastName}` : "User"}</span>
+              <span className="hidden sm:inline">{hasMounted && user ? `${user.firstName} ${user.lastName}` : "User"}</span>
             </div>
             <button onClick={() => { logout(); router.push("/login"); }}
               className="text-xs font-mono font-bold px-3 py-1.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] shadow-[2px_2px_0px_#173300] transition-all">
