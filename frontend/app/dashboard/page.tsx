@@ -47,7 +47,7 @@ interface Trip {
   id: string; rideId?: string; role: "PASSENGER" | "DRIVER";
   driverName: string; driverPhone: string; driverId?: string;
   passengers: string[];
-  passengersList?: Array<{ id: string; firstName: string; lastName: string; phone?: string; seatsBooked: number; fareAmount: number; otp?: string }>;
+  passengersList?: Array<{ id: string; firstName: string; lastName: string; phone?: string; seatsBooked: number; fareAmount: number; paymentStatus?: string; paymentMethod?: string; otp?: string }>;
   vehicleModel: string; plateNumber: string;
   pickupLabel: string; pickupLat?: number; pickupLng?: number;
   destinationLabel: string; destinationLat?: number; destinationLng?: number;
@@ -55,6 +55,8 @@ interface Trip {
   status: string; distanceKm: number; durationMins: number;
   routeGeometry?: string;
   otp?: string;
+  myPaymentStatus?: string;
+  myPaymentMethod?: string;
 }
 
 interface NegotiationState {
@@ -308,7 +310,7 @@ export default function EmployeeDashboard() {
 
   /* Chat */
   const [chatOpenTrip, setChatOpenTrip] = useState<Trip | null>(null);
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: string; text: string; time: string }>>([]);
+  const [chatMessages, setChatMessages] = useState<Array<{ id?: string; senderId?: string; sender: string; text: string; time: string }>>([]);
   const [chatText, setChatText] = useState("");
 
   /* Offered Rides & Driver Bargains */
@@ -384,6 +386,8 @@ export default function EmployeeDashboard() {
 
   /* ── helper: map raw TripData to local Trip interface ── */
   function mapTrip(t: any): Trip {
+    const isPaid = t.myPaymentStatus === "PAID" || (t.passengers && t.passengers.some((p: any) => p.paymentStatus === "PAID"));
+    const payMethod = t.myPaymentMethod || t.passengers?.[0]?.paymentMethod || "";
     return {
       id: t.id,
       rideId: t.rideId,
@@ -409,6 +413,8 @@ export default function EmployeeDashboard() {
       durationMins: t.ride?.routeDurationMinutes || 0,
       routeGeometry: t.ride?.routeGeometry,
       otp: t.otp || "",
+      myPaymentStatus: isPaid ? "PAID" : (t.myPaymentStatus || "PENDING"),
+      myPaymentMethod: payMethod,
     };
   }
 
@@ -811,12 +817,25 @@ export default function EmployeeDashboard() {
     try {
       const { apiUpdateTripStatus, apiGetMyTrips } = await import("../lib/api");
       await apiUpdateTripStatus(trip.id, "COMPLETED");
-      setPaymentTrip(trip);
       setTrackingTripId(null);
       const fresh = await apiGetMyTrips();
       setTrips(fresh.map(mapTrip));
-      showToast("Ride completed! Proceed to payment.", "success");
+      showToast("Ride completed! Fare collection panel is active below. 🏁", "success");
     } catch (err: any) { showToast(err?.message || "Could not end ride", "error"); }
+  };
+
+  /* ── Driver: Mark Passenger Payment as Paid via Cash or Online ── */
+  const handleMarkPassengerPaid = async (trip: Trip, passengerId: string | undefined, method: "CASH" | "ONLINE" | "UPI") => {
+    try {
+      const { apiPayForTrip, apiGetMyTrips } = await import("../lib/api");
+      const methodKey = method === "ONLINE" ? "UPI" : method;
+      await apiPayForTrip(trip.id, methodKey);
+      showToast(`Marked passenger payment as ${method === "CASH" ? "Paid via Cash 💵" : "Paid Online 💳"}!`, "success");
+      const fresh = await apiGetMyTrips();
+      setTrips(fresh.map(mapTrip));
+    } catch (err: any) {
+      showToast(err?.message || "Could not update passenger payment status", "error");
+    }
   };
 
   /* ── Payment ── */
@@ -895,27 +914,104 @@ export default function EmployeeDashboard() {
     try {
       const { apiGetMessages } = await import("../lib/api");
       const msgs = await apiGetMessages(trip.id);
-      setChatMessages(msgs.map(m => ({
-        sender: `${m.sender?.firstName || "User"} ${m.sender?.lastName || ""}`.trim(),
-        text: m.content,
-        time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      })));
-    } catch { setChatMessages([]); }
+      const list = Array.isArray(msgs) ? msgs : (msgs as any)?.messages || [];
+      setChatMessages(list.map((m: any) => {
+        const isMe = m.senderId === user?.id || m.sender?.id === user?.id;
+        return {
+          id: m.id,
+          senderId: m.senderId || m.sender?.id,
+          sender: isMe
+            ? `${user ? `${user.firstName} ${user.lastName}` : "You"} (You)`
+            : `${m.sender?.firstName || "User"} ${m.sender?.lastName || ""}`.trim(),
+          text: m.content,
+          time: new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+      }));
+    } catch (err) {
+      console.error("[Chat] Error fetching history:", err);
+      setChatMessages([]);
+    }
   };
+
+  /* ── Real-time Socket Listener for active chat ── */
+  useEffect(() => {
+    if (!chatOpenTrip) return;
+    let chatSock: any = null;
+
+    const setupChatSocket = async () => {
+      const { getChatSocket, joinChatTripRoom } = await import("../lib/socket");
+      chatSock = getChatSocket();
+      joinChatTripRoom(chatOpenTrip.id);
+
+      chatSock.on("message:new", (msg: any) => {
+        if (msg && (msg.tripId === chatOpenTrip.id || !msg.tripId)) {
+          const isMe = msg.senderId === user?.id || msg.sender?.id === user?.id;
+          const senderLabel = isMe
+            ? `${user ? `${user.firstName} ${user.lastName}` : "You"} (You)`
+            : `${msg.sender?.firstName || "User"} ${msg.sender?.lastName || ""}`.trim();
+
+          const formatted = {
+            id: msg.id,
+            senderId: msg.senderId || msg.sender?.id,
+            sender: senderLabel,
+            text: msg.content,
+            time: msg.createdAt
+              ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          };
+
+          setChatMessages(prev => {
+            const exists = prev.some(m => (m.id && msg.id && m.id === msg.id) || (m.text === msg.content && m.senderId === (msg.senderId || msg.sender?.id)));
+            if (exists) return prev;
+            return [...prev, formatted];
+          });
+        }
+      });
+    };
+
+    setupChatSocket();
+
+    return () => {
+      if (chatSock) {
+        chatSock.off("message:new");
+      }
+    };
+  }, [chatOpenTrip, user]);
 
   const handleSendChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatText.trim() || !chatOpenTrip) return;
     const text = chatText.trim();
     setChatText("");
-    setChatMessages(prev => [...prev, {
-      sender: user ? `${user.firstName} ${user.lastName} (You)` : "You",
-      text, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    }]);
+
+    const optMsg = {
+      id: `temp-${Date.now()}`,
+      senderId: user?.id,
+      sender: `${user ? `${user.firstName} ${user.lastName}` : "You"} (You)`,
+      text,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    setChatMessages(prev => [...prev, optMsg]);
+
+    try {
+      const { sendChatMessage } = await import("../lib/socket");
+      sendChatMessage(chatOpenTrip.id, text);
+    } catch {}
+
     try {
       const { apiSendMessage } = await import("../lib/api");
-      await apiSendMessage(chatOpenTrip.id, text);
-    } catch { /* message still shows locally */ }
+      const res = await apiSendMessage(chatOpenTrip.id, text);
+      if (res && res.id) {
+        setChatMessages(prev => prev.map(m => m.id === optMsg.id ? {
+          id: res.id,
+          senderId: res.senderId,
+          sender: `${user ? `${user.firstName} ${user.lastName}` : "You"} (You)`,
+          text: res.content,
+          time: new Date(res.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        } : m));
+      }
+    } catch { /* message still rendered optimistically */ }
   };
 
   /* ── Status helpers ── */
@@ -936,7 +1032,7 @@ export default function EmployeeDashboard() {
   };
 
   const isActiveTrip = (t: Trip) => ["SCHEDULED", "IN_PROGRESS", "TRIP_STARTED", "TRIP_IN_PROGRESS", "RIDE_BOOKED"].includes(t.status);
-  const needsPayment = (t: Trip) => ["COMPLETED", "TRIP_COMPLETED", "PAYMENT_PENDING"].includes(t.status);
+  const needsPayment = (t: Trip) => t.role === "PASSENGER" && t.myPaymentStatus !== "PAID" && ["COMPLETED", "TRIP_COMPLETED", "PAYMENT_PENDING"].includes(t.status);
   const activeTrips = trips.filter(isActiveTrip);
 
   const [hasMounted, setHasMounted] = useState(false);
@@ -1648,6 +1744,56 @@ export default function EmployeeDashboard() {
                     </button>
                   )}
 
+                  {/* DRIVER: Passenger Fares & Payment Settlement */}
+                  {trip.role === "DRIVER" && (trip.status === "COMPLETED" || trip.status === "TRIP_COMPLETED") && (
+                    <div className="bg-[#173300]/[0.03] border-2 border-[#173300] rounded-2xl p-5 flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-heading text-base font-extrabold text-[#173300]">
+                          💵 Passenger Fare Settlement & Payments
+                        </h4>
+                        <span className="text-[10px] font-mono font-bold bg-[#FFEB5B] border border-[#173300] text-[#173300] px-2.5 py-0.5 rounded-lg shadow-[1px_1px_0px_#173300]">
+                          Driver Control
+                        </span>
+                      </div>
+                      <div className="space-y-3">
+                        {(trip.passengersList && trip.passengersList.length > 0 ? trip.passengersList : [{ id: "", firstName: "Passenger", lastName: "", phone: "", seatsBooked: trip.seatsBooked, fareAmount: trip.fareAmount, paymentStatus: "PENDING" }]).map((p: any, idx: number) => (
+                          <div key={p.id || idx} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[2px_2px_0px_#173300]">
+                            <div>
+                              <div className="font-heading font-extrabold text-base text-[#173300]">
+                                {p.firstName} {p.lastName}
+                              </div>
+                              <div className="text-xs font-mono text-[#173300]/70 mt-0.5">
+                                {p.phone ? `Phone: ${p.phone} · ` : ""}{p.seatsBooked || 1} seat(s) · <span className="font-bold text-[#173300]">₹{p.fareAmount || trip.fareAmount}</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {p.paymentStatus === "PAID" ? (
+                                <span className="px-3.5 py-1.5 rounded-xl bg-green-100 border-2 border-green-500 text-green-800 font-mono font-extrabold text-xs shadow-[1px_1px_0px_#173300]">
+                                  ✓ PAID ({p.paymentMethod === "CASH" ? "CASH" : "ONLINE"})
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handleMarkPassengerPaid(trip, p.id, "CASH")}
+                                    className="px-3.5 py-2 rounded-xl bg-amber-200 text-amber-950 font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300] hover:bg-amber-300 transition-all whitespace-nowrap"
+                                  >
+                                    💵 Mark Paid via Cash
+                                  </button>
+                                  <button
+                                    onClick={() => handleMarkPassengerPaid(trip, p.id, "ONLINE")}
+                                    className="px-4 py-2 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300] hover:bg-[#173300]/90 transition-all whitespace-nowrap"
+                                  >
+                                    💳 Mark Paid Online
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Start tracking button */}
                   {isActiveTrip(trip) && trackingTripId !== trip.id && trip.status === "IN_PROGRESS" && (
                     <button onClick={() => setTrackingTripId(trip.id)} className="w-full py-2.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-heading font-extrabold text-sm hover:bg-[#FFEB5B] transition-colors">
@@ -1655,13 +1801,27 @@ export default function EmployeeDashboard() {
                     </button>
                   )}
 
-                  {/* Payment due */}
-                  {needsPayment(trip) && (
-                    <div className="flex items-center justify-between pt-2 border-t-2 border-dashed border-[#B6B6B6]">
-                      <span className="font-heading text-2xl font-extrabold text-[#173300]">₹{trip.fareAmount}</span>
-                      <button onClick={() => setPaymentTrip(trip)} className="px-8 py-3 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-base border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                        Pay Now
-                      </button>
+                  {/* PASSENGER: Display payment badge if paid, or Pay Now if unpaid */}
+                  {trip.role === "PASSENGER" && ["COMPLETED", "TRIP_COMPLETED", "PAYMENT_PENDING"].includes(trip.status) && (
+                    <div className="pt-2 border-t-2 border-dashed border-[#B6B6B6]">
+                      {trip.myPaymentStatus === "PAID" ? (
+                        <div className="bg-green-100 border-2 border-green-500 rounded-2xl p-4 flex items-center justify-between shadow-[3px_3px_0px_#173300]">
+                          <div className="flex items-center gap-2">
+                            <span className="font-heading font-extrabold text-base text-green-900">✓ Paid</span>
+                            <span className="text-xs font-mono font-bold px-2.5 py-0.5 bg-green-200 text-green-900 rounded-md uppercase">
+                              via {trip.myPaymentMethod || "ONLINE"}
+                            </span>
+                          </div>
+                          <span className="font-heading text-xl font-extrabold text-green-900">₹{trip.fareAmount}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <span className="font-heading text-2xl font-extrabold text-[#173300]">₹{trip.fareAmount}</span>
+                          <button onClick={() => setPaymentTrip(trip)} className="px-8 py-3 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-base border-2 border-[#173300] shadow-[4px_4px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
+                            Pay Now
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1945,10 +2105,10 @@ export default function EmployeeDashboard() {
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-xs font-mono font-bold uppercase text-[#173300]/70">Payment Method</label>
-              {(["CASH","WALLET","CARD","UPI"] as const).map(m => (
+              {(["WALLET", "UPI", "CARD"] as const).map(m => (
                 <button key={m} onClick={() => setPayMethod(m)}
                   className={`p-3 rounded-xl border-2 font-mono text-xs font-bold flex justify-between items-center ${payMethod === m ? "bg-[#173300] text-[#FFEB5B] border-[#173300]" : "bg-[#FCFAF5] text-[#173300] border-[#B6B6B6]"}`}>
-                  <span>{m === "CASH" ? "Cash" : m === "WALLET" ? "Wallet" : m === "CARD" ? "Card" : "UPI"}</span>
+                  <span>{m === "WALLET" ? "Wallet" : m === "UPI" ? "UPI" : "Card"}</span>
                   {m === "WALLET" && <span className="opacity-70">(Balance: ₹{walletBalance.toFixed(0)})</span>}
                 </button>
               ))}

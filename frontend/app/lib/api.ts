@@ -638,11 +638,12 @@ export interface MessageData {
   senderId: string;
   content: string;
   createdAt: string;
-  sender?: { firstName: string; lastName: string; role: string };
+  sender?: { id?: string; firstName: string; lastName: string; role: string };
 }
 
 export async function apiGetMessages(tripId: string, page = 1): Promise<MessageData[]> {
-  return fetchApi<MessageData[]>(`/trips/${tripId}/messages?page=${page}&limit=50`);
+  const res = await fetchApi<any>(`/trips/${tripId}/messages?page=${page}&limit=50`);
+  return Array.isArray(res) ? res : (res?.messages || []);
 }
 
 export async function apiSendMessage(tripId: string, content: string): Promise<MessageData> {
