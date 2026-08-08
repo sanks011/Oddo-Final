@@ -283,7 +283,7 @@ function LoginContent() {
   };
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full max-w-md" suppressHydrationWarning>
       {/* ── Tabs ─── */}
       <div className="flex gap-1 p-1 bg-[#173300]/[0.06] rounded-xl mb-8 border-2 border-dashed border-[#B6B6B6]">
         {(["signin", "signup"] as Tab[]).map((t) => (
@@ -645,9 +645,9 @@ function LoginContent() {
 /* ── Page shell (no useSearchParams here — Suspense-safe) ── */
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex bg-[#FCFAF5]">
+    <div className="min-h-screen flex bg-[#FCFAF5]" suppressHydrationWarning>
       {/* ── Left Panel ────────────────────────────────── */}
-      <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] relative overflow-hidden flex-col">
+      <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] relative overflow-hidden flex-col" suppressHydrationWarning>
         <Image
           src="/login-panel.png"
           alt="OddoStock brand artwork"
@@ -656,10 +656,10 @@ export default function LoginPage() {
           priority
         />
         {/* Overlay gradient for readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#173300]/70 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#173300]/70 via-transparent to-transparent" suppressHydrationWarning />
 
         {/* Logo on top */}
-        <div className="relative z-10 p-8">
+        <div className="relative z-10 p-8" suppressHydrationWarning>
           <Link href="/" className="inline-block">
             <img
               src="/logo.svg"
@@ -670,7 +670,7 @@ export default function LoginPage() {
         </div>
 
         {/* Bottom copy */}
-        <div className="relative z-10 mt-auto p-8 pb-10">
+        <div className="relative z-10 mt-auto p-8 pb-10" suppressHydrationWarning>
           <p className="font-heading text-[#FFEB5B] text-3xl xl:text-4xl leading-tight font-extrabold">
             Deliver what was agreed.
           </p>
@@ -681,9 +681,9 @@ export default function LoginPage() {
       </div>
 
       {/* ── Right Panel ───────────────────────────────── */}
-      <div className="flex-1 flex flex-col justify-start md:justify-center items-center px-6 py-6 md:py-10 lg:px-12 xl:px-16 overflow-y-auto max-h-screen scrollbar-none my-auto">
+      <div className="flex-1 flex flex-col justify-start md:justify-center items-center px-6 py-6 md:py-10 lg:px-12 xl:px-16 overflow-y-auto max-h-screen scrollbar-none my-auto" suppressHydrationWarning>
         {/* Mobile logo */}
-        <div className="lg:hidden mb-6 self-start">
+        <div className="lg:hidden mb-6 self-start" suppressHydrationWarning>
           <Link href="/">
             <img src="/logo.svg" alt="OddoStock" className="h-9 w-auto" />
           </Link>
