@@ -408,9 +408,9 @@ class RidesService {
         data: {
           rideId,
           passengerId: request.passengerId,
-          joinRequestId: requestId,
+          requestId: requestId,
           seatsBooked: request.seatsRequested,
-          status: 'BOOKED',
+          totalFare: request.agreedFare,
         },
       });
 
@@ -434,7 +434,8 @@ class RidesService {
         trip = await tx.trip.create({
           data: {
             rideId,
-            status: 'RIDE_BOOKED',
+            driverId: currentRide.driverId,
+            status: 'SCHEDULED',
           },
           include: {
             ride: {
@@ -442,7 +443,7 @@ class RidesService {
                 bookings: {
                   include: {
                     passenger: { select: { id: true, firstName: true, lastName: true, phone: true } },
-                    joinRequest: { select: { agreedFare: true } },
+                    request: { select: { agreedFare: true } },
                   },
                 },
               },
@@ -469,7 +470,7 @@ class RidesService {
         lastName: b.passenger.lastName,
         phone: b.passenger.phone,
         seatsBooked: b.seatsBooked,
-        fareAmount: Number(b.joinRequest?.agreedFare || currentRide.farePerSeat),
+        fareAmount: Number(b.request?.agreedFare || currentRide.farePerSeat),
       }));
 
       return {

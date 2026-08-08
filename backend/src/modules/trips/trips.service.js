@@ -68,8 +68,8 @@ class TripsService {
         lastName: b.passenger.lastName,
         phone: b.passenger.phone,
         seatsBooked: b.seatsBooked,
-        fareAmount: Number(b.joinRequest?.agreedFare || trip.ride.farePerSeat),
-        paymentStatus: payment ? payment.status : (trip.status === 'PAYMENT_COMPLETED' ? 'PAID' : 'PENDING'),
+        fareAmount: Number(b.request?.agreedFare || trip.ride.farePerSeat),
+        paymentStatus: payment ? payment.status : (trip.status === 'COMPLETED' ? 'PAID' : 'PENDING'),
       };
     });
 
@@ -77,8 +77,8 @@ class TripsService {
     let fareAmount = Number(trip.ride.farePerSeat);
     if (!isDriver) {
       const myBooking = trip.ride.bookings?.find((b) => b.passengerId === currentUser.id);
-      if (myBooking?.joinRequest?.agreedFare) {
-        fareAmount = Number(myBooking.joinRequest.agreedFare);
+      if (myBooking?.request?.agreedFare) {
+        fareAmount = Number(myBooking.request.agreedFare);
       }
     }
 
@@ -130,7 +130,7 @@ class TripsService {
     const skip = (page - 1) * limit;
 
     const where = {
-      status: { in: ['TRIP_COMPLETED', 'PAYMENT_PENDING', 'PAYMENT_COMPLETED'] },
+      status: { in: ['COMPLETED', 'CANCELLED'] },
       ride: {
         orgId: currentUser.role === 'SUPER_ADMIN' ? undefined : currentUser.orgId,
         OR: [
@@ -152,7 +152,7 @@ class TripsService {
               bookings: {
                 include: {
                   passenger: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
-                  joinRequest: { select: { agreedFare: true } },
+                  request: { select: { agreedFare: true } },
                 },
               },
             },
@@ -196,7 +196,7 @@ class TripsService {
             bookings: {
               include: {
                 passenger: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
-                joinRequest: { select: { agreedFare: true } },
+                  request: { select: { agreedFare: true } },
               },
             },
           },
@@ -221,7 +221,7 @@ class TripsService {
             bookings: {
               include: {
                 passenger: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
-                joinRequest: { select: { agreedFare: true } },
+                  request: { select: { agreedFare: true } },
               },
             },
           },
