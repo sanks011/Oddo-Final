@@ -151,8 +151,6 @@ export interface OrgData {
   name: string;
   slug?: string;
   status?: string;
-  fuelCostPerLitre?: number;
-  costPerKmDefault?: number;
   _count?: { users: number };
 }
 
@@ -171,8 +169,6 @@ export async function apiGetOrganization(orgId: string): Promise<OrgData> {
 export async function apiCreateOrganization(payload: {
   name: string;
   slug?: string;
-  fuelCostPerLitre?: number;
-  costPerKmDefault?: number;
   status?: string;
 }): Promise<OrgData> {
   const res = await fetchApi<any>("/orgs", {
@@ -188,7 +184,7 @@ export async function apiCreateOrganization(payload: {
 
 export async function apiUpdateOrganization(
   orgId: string,
-  payload: Partial<{ name: string; status: string; fuelCostPerLitre: number; costPerKmDefault: number }>
+  payload: Partial<{ name: string; status: string }>
 ) {
   return fetchApi<OrgData>(`/orgs/${orgId}`, {
     method: "PATCH",
@@ -221,8 +217,6 @@ export async function apiProvisionOrgAdmin(
 export async function apiUpdateOrgSettings(
   orgId: string,
   payload: {
-    fuelCostPerLitre?: number;
-    costPerKmDefault?: number;
     subsidyPercent?: number;
     baseRideCharge?: number;
     maxRidersPerCarpool?: number;
@@ -659,20 +653,9 @@ export async function apiGetFuelReport() {
     orgId: string;
     orgName: string;
     totalDistanceKm: number;
-    estimatedFuelLitres: number;
-    estimatedTotalFuelCost: number;
-    fuelCostPerLitre: number;
     assumedKmPerLitre: number;
+    estimatedFuelLitres: number;
   }>("/reports/fuel");
-}
-
-export async function apiGetCostPerKmReport() {
-  return fetchApi<{
-    orgId: string;
-    costPerKmDefault: number;
-    derivedFuelCostPerKm: number;
-    fuelCostPerLitre: number;
-  }>("/reports/cost-per-km");
 }
 
 export async function apiGetVehicleCostReport() {
@@ -683,7 +666,7 @@ export async function apiGetVehicleCostReport() {
       registrationNumber: string;
       totalTrips: number;
       totalDistanceKm: number;
-      estimatedFuelCost: number;
+      estimatedFuelLitres: number;
     }>
   >("/reports/vehicle-cost");
 }

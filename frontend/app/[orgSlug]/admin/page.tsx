@@ -11,9 +11,7 @@ type AdminTab =
   | "approvals"
   | "employees"
   | "vehicles"
-  | "carpool-config"
-  | "cost-config"
-  | "analytics";
+  | "carpool-config";
 
 export default function OrgAdminDashboard({
   params,
@@ -28,9 +26,6 @@ export default function OrgAdminDashboard({
     approveApplication,
     rejectApplication,
     toggleEmployeeAccess,
-    addEmployee,
-    addVehicle,
-    updateVehicleStatus,
     updateOrgConfig,
   } = useApp();
 
@@ -80,7 +75,6 @@ export default function OrgAdminDashboard({
 
   const orgConfig = configs[orgSlug] || {
     orgSlug,
-    fuelCostPerKm: realOrg?.costPerKmDefault || 0.18,
     baseRideCharge: 2.5,
     subsidyPercent: 50,
     maxRidersPerCarpool: 4,
@@ -122,63 +116,11 @@ export default function OrgAdminDashboard({
   const [empSearch, setEmpSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
 
-  /* Modals state */
-  const [isAddEmpOpen, setIsAddEmpOpen] = useState(false);
-  const [isAddVehOpen, setIsAddVehOpen] = useState(false);
-
-  /* Form states for adding Employee */
-  const [newEmpName, setNewEmpName] = useState("");
-  const [newEmpEmail, setNewEmpEmail] = useState("");
-  const [newEmpId, setNewEmpId] = useState("");
-  const [newEmpDept, setNewEmpDept] = useState("Engineering");
-  const [newEmpRole, setNewEmpRole] = useState("Team Member");
-
-  /* Form states for adding Vehicle */
-  const [newPlate, setNewPlate] = useState("");
-  const [newModel, setNewModel] = useState("");
-  const [newDriverName, setNewDriverName] = useState("");
-  const [newDriverEmpId, setNewDriverEmpId] = useState("");
-  const [newSeats, setNewSeats] = useState(4);
-  const [newFuelType, setNewFuelType] = useState<"Electric" | "Hybrid" | "Petrol" | "Diesel">("Electric");
-
-  /* Image preview modal state */
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-
-  /* Handlers */
-  const handleAddEmployeeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEmpName || !newEmpEmail || !newEmpId) return;
-    setIsAddEmpOpen(false);
-    setNewEmpName("");
-    setNewEmpEmail("");
-    setNewEmpId("");
-    loadData();
-  };
-
-  const handleAddVehicleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPlate || !newModel || !newDriverName) return;
-    setIsAddVehOpen(false);
-    setNewPlate("");
-    setNewModel("");
-    setNewDriverName("");
-    loadData();
-  };
-
-  /* Calculated operational figures */
-  const avgDistanceKm = 14.5;
-  const costPerRideNoSubsidy = orgConfig.baseRideCharge + avgDistanceKm * orgConfig.fuelCostPerKm;
-  const companySubsidyPerRide = (costPerRideNoSubsidy * orgConfig.subsidyPercent) / 100;
-
   const carpoolEnabledCount = (orgEmps as any[]).filter((e) => e.carpoolAccess !== false).length;
   const totalEmployeesCount = orgEmps.length;
   const adoptionRatePercent = totalEmployeesCount > 0
     ? ((carpoolEnabledCount / totalEmployeesCount) * 100).toFixed(1)
     : "0.0";
-
-  const totalAccumulatedRides = (orgEmps as any[]).reduce((sum, e) => sum + (e.totalRides || 0), 0);
-  const totalRidesCount = totalAccumulatedRides;
-  const totalDistanceKm = totalRidesCount * avgDistanceKm;
 
   const filteredEmployees = orgEmps.filter((e: any) => {
     const displayName = e.name || `${e.firstName || ""} ${e.lastName || ""}`.trim();
@@ -237,8 +179,6 @@ export default function OrgAdminDashboard({
             { id: "employees", label: "Employees", badge: orgEmps.length },
             { id: "vehicles", label: "Vehicles & Drivers", badge: orgVehs.length },
             { id: "carpool-config", label: "Carpool Rules", badge: null },
-            { id: "cost-config", label: "Fuel & Travel Costs", badge: null },
-            { id: "analytics", label: "Participation", badge: null },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -277,7 +217,7 @@ export default function OrgAdminDashboard({
                   {org.name} Operations Hub
                 </h1>
                 <p className="text-xs text-[#173300]/60 font-mono mt-1">
-                  Manage organization registration grants, fleet drivers, carpool formulas, and cost rates.
+                  Manage organization registration grants, fleet drivers, and carpool policies.
                 </p>
               </div>
 
@@ -329,13 +269,13 @@ export default function OrgAdminDashboard({
 
               <div className="bg-[#FCFAF5] border-2 border-dashed border-[#B6B6B6] rounded-2xl p-5 shadow-sm">
                 <span className="text-xs font-mono font-semibold text-[#173300]/60 uppercase tracking-wider">
-                  Configured Fuel Rate
+                  Organization Subsidy
                 </span>
                 <div className="text-3xl font-extrabold font-heading text-[#173300] mt-2">
-                  ${orgConfig.fuelCostPerKm.toFixed(2)} <span className="text-sm font-normal font-mono">/ km</span>
+                  {orgConfig.subsidyPercent}%
                 </div>
                 <span className="text-xs text-[#173300]/60 font-mono mt-2 inline-block">
-                  {orgConfig.subsidyPercent}% Org Subsidy
+                  Org Travel Support
                 </span>
               </div>
 
