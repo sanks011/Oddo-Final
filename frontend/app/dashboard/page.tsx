@@ -177,6 +177,9 @@ export default function EmployeeDashboard() {
 
         setNegotiating(prev => {
           if (!prev || prev.rideId !== rideId) return prev;
+          if (lastBy === "DRIVER" && latestAmt > 0) {
+            setBargainAmount(latestAmt);
+          }
           return {
             ...prev,
             negotiationId: neg.id,
@@ -1788,13 +1791,21 @@ export default function EmployeeDashboard() {
               <button onClick={() => setNegotiating(null)} className="w-8 h-8 rounded-full border border-[#173300] font-bold text-xs hover:bg-[#FFEB5B]">✕</button>
             </div>
 
+            {negotiating.lastOfferedBy === "DRIVER" && (
+              <div className="bg-[#FFEB5B] border-2 border-[#173300] p-3 rounded-2xl text-center font-heading font-extrabold text-xs text-[#173300] shadow-[3px_3px_0px_#173300] animate-pulse">
+                Driver Countered: ₹{negotiating.currentOffer}! Accept below or adjust your counter offer.
+              </div>
+            )}
+
             <div className="bg-[#173300]/[0.04] rounded-2xl p-4 text-center">
               <div className="text-xs font-mono text-[#173300]/60 mb-1">Listed Fare</div>
               <div className="text-2xl font-extrabold font-heading text-[#173300] line-through opacity-50">₹{negotiating.listedFare}</div>
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#173300]/70">Your Offer</label>
+              <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#173300]/70">
+                {negotiating.lastOfferedBy === "DRIVER" ? "Driver Counter Price / Adjust" : "Your Offer"}
+              </label>
               <div className="flex items-center justify-between gap-2 bg-[#173300]/[0.02] p-3 rounded-2xl border-2 border-dashed border-[#B6B6B6]">
                 <div className="flex items-center gap-1.5">
                   <button
@@ -1853,7 +1864,7 @@ export default function EmployeeDashboard() {
               </button>
               {negotiating.negotiationId && (
                 <button onClick={handleAcceptNegotiation} className="flex-1 py-3 rounded-xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">
-                  Accept & Book
+                  Accept & Book at ₹{negotiating.currentOffer}
                 </button>
               )}
             </div>
