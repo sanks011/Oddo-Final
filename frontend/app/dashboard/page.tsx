@@ -137,9 +137,123 @@ export default function EmployeeDashboard() {
   const [offerFarePerSeat, setOfferFarePerSeat] = useState(80);
   const [offerLoading, setOfferLoading] = useState(false);
 
+  interface ActivePassengerBargain {
+    rideId: string;
+    negotiationId: string | null;
+    pickupLabel: string;
+    destinationLabel: string;
+    driverName: string;
+    model: string;
+    plateNumber: string;
+    farePerSeat: number;
+    currentOffer: number;
+    lastOfferedBy: "PASSENGER" | "DRIVER" | null;
+    status: "pending" | "accepted" | "rejected";
+    updatedAt: string;
+  }
+
   /* Negotiation */
   const [negotiating, setNegotiating] = useState<NegotiationState | null>(null);
   const [bargainAmount, setBargainAmount] = useState(0);
+  const [activePassengerBargains, setActivePassengerBargains] = useState<ActivePassengerBargain[]>([]);
+  const [isRefreshingNeg, setIsRefreshingNeg] = useState(false);
+
+  const refreshNegotiationData = useCallback(async (rideId: string, showToastOnSuccess = false) => {
+    setIsRefreshingNeg(true);
+    try {
+      const { apiGetNegotiations } = await import("../lib/api");
+      const list = await apiGetNegotiations(rideId);
+      if (Array.isArray(list) && list.length > 0) {
+        const neg = list[0];
+        const offers = neg.offers || [];
+        const formattedHistory = offers.map(o => ({
+          by: o.offeredBy === "PASSENGER" ? "You" : "Driver",
+          amount: Number(o.amount),
+          time: new Date(o.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        }));
+        const lastOffer = offers[offers.length - 1];
+        const latestAmt = lastOffer ? Number(lastOffer.amount) : 0;
+        const lastBy = lastOffer ? lastOffer.offeredBy : null;
+
+        setNegotiating(prev => {
+          if (!prev || prev.rideId !== rideId) return prev;
+          return {
+            ...prev,
+            negotiationId: neg.id,
+            currentOffer: latestAmt || prev.currentOffer,
+            lastOfferedBy: lastBy || prev.lastOfferedBy,
+            status: neg.status === "ACCEPTED" ? "accepted" : neg.status === "REJECTED" ? "rejected" : "pending",
+            history: formattedHistory,
+          };
+        });
+
+        // Also sync active passenger bargain item
+        setActivePassengerBargains(prev => {
+          const idx = prev.findIndex(b => b.rideId === rideId);
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = {
+              ...copy[idx],
+              negotiationId: neg.id,
+              currentOffer: latestAmt || copy[idx].currentOffer,
+              lastOfferedBy: lastBy,
+              status: neg.status === "ACCEPTED" ? "accepted" : neg.status === "REJECTED" ? "rejected" : "pending",
+              updatedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            };
+            return copy;
+          }
+          return prev;
+        });
+
+        if (showToastOnSuccess) {
+          showToast("Refreshed latest counter-offers!", "info");
+        }
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setIsRefreshingNeg(false);
+    }
+  }, [showToast]);
+
+  /* Auto-poll negotiation state every 3s while Bargain Modal is open */
+  useEffect(() => {
+    if (!negotiating?.rideId) return;
+    const rideId = negotiating.rideId;
+    const interval = setInterval(() => {
+      refreshNegotiationData(rideId);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [negotiating?.rideId, refreshNegotiationData]);
+
+  /* Listen for socket negotiation events while Bargain Modal is open */
+  useEffect(() => {
+    if (!negotiating?.rideId) return;
+    let sock: any;
+    const rideId = negotiating.rideId;
+    const setup = async () => {
+      const { getTrackingSocket, joinRideRoom } = await import("../lib/socket");
+      sock = getTrackingSocket();
+      joinRideRoom(rideId);
+      sock.on("negotiation:offer", (data: any) => {
+        if (data.rideId === rideId) {
+          refreshNegotiationData(rideId);
+        }
+      });
+      sock.on("negotiation:accepted", (data: any) => {
+        if (data.rideId === rideId) {
+          refreshNegotiationData(rideId);
+        }
+      });
+    };
+    setup();
+    return () => {
+      if (sock) {
+        sock.off("negotiation:offer");
+        sock.off("negotiation:accepted");
+      }
+    };
+  }, [negotiating?.rideId, refreshNegotiationData]);
 
   /* Trip actions */
   const [activeOtpTrip, setActiveOtpTrip] = useState<Trip | null>(null);
@@ -357,14 +471,30 @@ export default function EmployeeDashboard() {
         pickupLabel: startLoc, pickupLat: pickupGeo.lat, pickupLng: pickupGeo.lng,
         destinationLabel: destLoc, destinationLat: destGeo.lat, destinationLng: destGeo.lng,
         seatsNeeded: selectedSeats,
+        radiusKm: 1.0,
       };
       if (scheduledEnabled) {
         payload.departureDate = travelDateTime.split("T")[0];
         payload.departureTime = travelDateTime.split("T")[1];
       }
       const res = await apiSearchRides(payload);
-      if (res.rides && res.rides.length > 0) {
-        setAvailableRides(res.rides.map((r: any) => ({
+      const rawRides = res.rides || [];
+
+      // Strict AND filtering: BOTH Pickup AND Destination MUST be within 1.0 km (1000m)
+      const filtered = rawRides.filter((r: any) => {
+        if (r.pickupLat != null && r.pickupLng != null) {
+          const pDist = haversineMetres(pickupGeo.lat, pickupGeo.lng, r.pickupLat, r.pickupLng);
+          if (pDist > 1000) return false;
+        }
+        if (r.destinationLat != null && r.destinationLng != null) {
+          const dDist = haversineMetres(destGeo.lat, destGeo.lng, r.destinationLat, r.destinationLng);
+          if (dDist > 1000) return false;
+        }
+        return true;
+      });
+
+      if (filtered.length > 0) {
+        setAvailableRides(filtered.map((r: any) => ({
           id: r.id,
           driverName: r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : "Driver",
           driverRating: r.driver?.rating || 4.5,
@@ -382,7 +512,7 @@ export default function EmployeeDashboard() {
         })));
       } else {
         setAvailableRides([]);
-        setSearchError("No rides found near your location. Try a different address or time.");
+        setSearchError("No matching rides found on this exact route. Pickup and destination must both be within 1 km.");
       }
     } catch (err: any) {
       setSearchError(err?.message || "Search failed. Please try again.");
@@ -423,6 +553,34 @@ export default function EmployeeDashboard() {
         status: "pending",
         history: [...prev.history, { by: "You", amount: bargainAmount, time: new Date().toLocaleTimeString() }],
       } : null);
+
+      // Track bargain in Passenger's My Trips list
+      const rideObj = availableRides.find(r => r.id === negotiating.rideId);
+      setActivePassengerBargains(prev => {
+        const idx = prev.findIndex(b => b.rideId === negotiating.rideId);
+        const item = {
+          rideId: negotiating.rideId,
+          negotiationId: neg.id,
+          pickupLabel: rideObj?.pickupLabel || "Pickup Location",
+          destinationLabel: rideObj?.destinationLabel || "Drop Location",
+          driverName: rideObj?.driverName || "Driver",
+          model: rideObj?.model || "Vehicle",
+          plateNumber: rideObj?.plateNumber || "",
+          farePerSeat: negotiating.listedFare,
+          currentOffer: bargainAmount,
+          lastOfferedBy: "PASSENGER" as const,
+          status: "pending" as const,
+          updatedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = item;
+          return copy;
+        }
+        return [...prev, item];
+      });
+
+      showToast("Offer sent to driver!", "success");
     } catch (err: any) {
       showToast(err?.message || "Could not send offer", "error");
       setSearchError(err?.message || "Could not send offer");
@@ -438,6 +596,7 @@ export default function EmployeeDashboard() {
       emitNegotiationAccept(negotiating.rideId, negotiating.negotiationId, negotiating.currentOffer);
       await apiSubmitJoinRequest(negotiating.rideId, { agreedFare: negotiating.currentOffer, seatsRequested: selectedSeats });
       showToast(`Negotiation accepted at ₹${negotiating.currentOffer}! Join request sent.`, "success");
+      setActivePassengerBargains(prev => prev.filter(b => b.rideId !== negotiating.rideId));
       setNegotiating(null);
       setActiveMainTab("my-trips");
       const { apiGetMyTrips } = await import("../lib/api");
@@ -1263,11 +1422,61 @@ export default function EmployeeDashboard() {
               </div>
             )}
 
-            {!tripsLoading && !offeredLoading && trips.length === 0 && offeredRides.length === 0 && (
+            {!tripsLoading && !offeredLoading && trips.length === 0 && offeredRides.length === 0 && activePassengerBargains.length === 0 && (
               <div className="text-center py-16">
                 <h3 className="font-heading text-xl font-extrabold text-[#173300]">No trips or offered rides yet</h3>
                 <p className="text-xs text-[#173300]/60 mt-2">Find or offer a ride to get started.</p>
                 <button onClick={() => setActiveMainTab("carpooling")} className="mt-6 px-6 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">Go to Dashboard</button>
+              </div>
+            )}
+
+            {/* Active Passenger Fare Bargains */}
+            {activePassengerBargains.length > 0 && (
+              <div className="flex flex-col gap-4 max-w-4xl w-full mx-auto mb-6">
+                <h3 className="font-heading text-xl font-extrabold text-[#173300]">Active Fare Bargains</h3>
+                {activePassengerBargains.map(b => (
+                  <div key={b.rideId} className="bg-[#FFEB5B]/30 border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#173300] text-[#FFEB5B]">
+                          Bargain Active
+                        </span>
+                        <span className="text-xs font-mono font-bold text-[#173300]/70">Driver: {b.driverName}</span>
+                      </div>
+                      <h4 className="font-heading text-lg font-extrabold text-[#173300] mt-1">{b.pickupLabel} to {b.destinationLabel}</h4>
+                      <div className="text-xs font-mono text-[#173300]/80 mt-0.5">
+                        Listed Fare: ₹{b.farePerSeat} · Latest Offer: <strong className="text-[#173300]">₹{b.currentOffer}</strong> ({b.lastOfferedBy === "DRIVER" ? "Driver Countered!" : "You Offered"})
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => {
+                          const rideObj = availableRides.find(r => r.id === b.rideId) || {
+                            id: b.rideId,
+                            driverName: b.driverName,
+                            driverRating: 4.5,
+                            driverPhone: "",
+                            model: b.model,
+                            plateNumber: b.plateNumber,
+                            pickupLabel: b.pickupLabel,
+                            destinationLabel: b.destinationLabel,
+                            departureTime: "Today",
+                            availableSeats: 1,
+                            farePerSeat: b.farePerSeat,
+                            distanceKm: 0,
+                            durationMins: 0,
+                            isScheduled: false,
+                          };
+                          handleOpenBargain(rideObj);
+                          refreshNegotiationData(b.rideId);
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300] hover:bg-[#173300]/90 transition-all"
+                      >
+                        View / Continue Bargain 💬
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -1557,8 +1766,19 @@ export default function EmployeeDashboard() {
       {negotiating && (
         <div className="fixed inset-0 z-50 bg-[#173300]/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 max-w-md w-full shadow-[8px_8px_0px_#173300] flex flex-col gap-5">
-            <div className="flex justify-between items-center">
-              <h3 className="font-heading text-2xl font-extrabold text-[#173300]">Bargain Fare</h3>
+            <div className="flex justify-between items-center gap-3">
+              <div className="flex items-center gap-3">
+                <h3 className="font-heading text-2xl font-extrabold text-[#173300]">Bargain Fare</h3>
+                <button
+                  type="button"
+                  onClick={() => refreshNegotiationData(negotiating.rideId, true)}
+                  disabled={isRefreshingNeg}
+                  className="px-2.5 py-1 bg-[#173300]/[0.06] border border-[#173300] rounded-xl text-xs font-mono font-bold text-[#173300] hover:bg-[#FFEB5B] transition-all flex items-center gap-1 shadow-[1.5px_1.5px_0px_#173300] disabled:opacity-50"
+                  title="Refresh counter-offers"
+                >
+                  <span className={`inline-block ${isRefreshingNeg ? "animate-spin" : ""}`}>↻</span> Refresh
+                </button>
+              </div>
               <button onClick={() => setNegotiating(null)} className="w-8 h-8 rounded-full border border-[#173300] font-bold text-xs hover:bg-[#FFEB5B]">✕</button>
             </div>
 
