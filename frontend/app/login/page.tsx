@@ -176,19 +176,26 @@ function LoginContent() {
     setSiLoading(true);
 
     try {
-      // Try real backend API login
       const { apiLogin } = await import("../lib/api");
       const res = await apiLogin(siEmail, siPassword);
-      login(res.accessToken);
-    } catch {
-      // Fallback for local sandbox/demo preview if backend server is not running
-      await new Promise((r) => setTimeout(r, 600));
-      login("demo-session-token");
+      login(res.accessToken, res.user);
+
+      // Role-based redirect
+      if (res.user.role === "SUPER_ADMIN") {
+        router.push("/super-admin");
+      } else if (res.user.role === "ORG_ADMIN") {
+        const slug = res.user.orgSlug || res.user.orgId || "admin";
+        router.push(`/${slug}/admin`);
+      } else {
+        const from = searchParams.get("from") || "/dashboard";
+        router.push(from);
+      }
+    } catch (err: any) {
+      setSiError(err?.message || "Invalid email or password.");
+      setSiLoading(false);
     }
 
     setSiLoading(false);
-    const from = searchParams.get("from") || "/dashboard";
-    router.push(from);
   };
 
   const handleSignUpStep1 = (e: React.FormEvent) => {

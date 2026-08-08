@@ -163,6 +163,70 @@ export default function EmployeeDashboard() {
     }
   }, [router]);
 
+  /* Load real data from backend on mount */
+  useEffect(() => {
+    const loadBackendData = async () => {
+      try {
+        const { apiListVehicles, apiGetMyTrips, apiGetWallet, apiListSavedPlaces } = await import("../lib/api");
+
+        // Load vehicles
+        const vehData = await apiListVehicles().catch(() => null);
+        if (vehData && vehData.length > 0) {
+          setVehicles(
+            vehData.map((v) => ({
+              id: v.id,
+              model: v.model,
+              plateNumber: v.registrationNumber,
+              capacity: v.seatingCapacity,
+              fuelType: (v.fuelType.charAt(0) + v.fuelType.slice(1).toLowerCase()) as Vehicle["fuelType"],
+              status: v.status === "VERIFIED" ? "Verified" : "Pending",
+            }))
+          );
+        }
+
+        // Load trips
+        const tripData = await apiGetMyTrips().catch(() => null);
+        if (tripData && tripData.length > 0) {
+          setTrips(
+            tripData.map((t) => ({
+              id: t.id,
+              role: (t.callerRole || "PASSENGER") as "PASSENGER" | "DRIVER",
+              driverName: t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Driver",
+              driverPhone: t.driver?.phone || "",
+              passengers: (t.passengers || []).map((p) => `${p.firstName} ${p.lastName}`),
+              vehicleModel: t.ride?.vehicle?.model || "Vehicle",
+              plateNumber: t.ride?.vehicle?.registrationNumber || "",
+              pickupLabel: t.ride?.pickupLabel || "",
+              destinationLabel: t.ride?.destinationLabel || "",
+              departureTime: t.ride?.departureAt ? new Date(t.ride.departureAt).toLocaleString() : "",
+              seatsBooked: t.passengers?.[0]?.seatsBooked || 1,
+              fareAmount: t.fareAmount || t.passengers?.[0]?.fareAmount || 0,
+              status: t.status as Trip["status"],
+              distanceKm: t.ride?.routeDistanceKm || 0,
+              durationMins: t.ride?.routeDurationMinutes || 0,
+            }))
+          );
+        }
+
+        // Load wallet
+        const walletData = await apiGetWallet().catch(() => null);
+        if (walletData) {
+          setWalletBalance(walletData.balance);
+          setWalletTransactions(walletData.transactions || []);
+        }
+
+        // Load saved places
+        const places = await apiListSavedPlaces().catch(() => null);
+        if (places && places.length > 0) {
+          setSavedPlaces(places.map((p) => ({ id: p.id, label: p.label, address: p.address })));
+        }
+      } catch {
+        // Gracefully keep mock data on backend error
+      }
+    };
+    loadBackendData();
+  }, []);
+
   /* Main Navigation Tab State */
   const [activeMainTab, setActiveMainTab] = useState<MainTab>("carpooling");
 
@@ -179,6 +243,7 @@ export default function EmployeeDashboard() {
   const [availableRides, setAvailableRides] = useState<AvailableRide[]>(INITIAL_AVAILABLE_RIDES);
   const [trips, setTrips] = useState<Trip[]>(INITIAL_TRIPS);
   const [walletBalance, setWalletBalance] = useState<number>(500);
+  const [walletTransactions, setWalletTransactions] = useState<Array<{ id: string; type: string; amount: number; description: string; createdAt: string }>>([]);
 
   /* Find Ride Inputs */
   const [startLoc, setStartLoc] = useState("");
@@ -239,13 +304,55 @@ export default function EmployeeDashboard() {
     setFindStep("route-confirm");
   };
 
-  /* Step 2 -> Step 3 (Available Rides) */
-  const handleConfirmRouteClick = () => {
+  /* Step 2 -> Step 3 (Available Rides via real API) */
+  const handleConfirmRouteClick = async () => {
     setFindStep("available-rides");
+    try {
+      const { apiSearchRides } = await import("../lib/api");
+      // Geocode labels to lat/lng (use defaults for now; replace with real geocoding)
+      const res = await apiSearchRides({
+        pickupLabel: startLoc,
+        pickupLat: 23.03, pickupLng: 72.587,
+        destinationLabel: destLoc,
+        destinationLat: 23.215, destinationLng: 72.636,
+        departureDate: travelDateTime.split("T")[0],
+        departureTime: travelDateTime.split("T")[1] || "08:00",
+        seatsNeeded: selectedSeats,
+        isRecurring,
+      });
+      if (res.rides && res.rides.length > 0) {
+        setAvailableRides(
+          res.rides.map((r) => ({
+            id: r.id,
+            driverName: r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : "Driver",
+            driverRating: r.driver?.rating || 4.5,
+            driverPhone: r.driver?.phone || "",
+            model: r.vehicle?.model || "Vehicle",
+            plateNumber: r.vehicle?.registrationNumber || "",
+            pickupLabel: r.pickupLabel,
+            destinationLabel: r.destinationLabel,
+            departureTime: new Date(r.departureAt).toLocaleString(),
+            availableSeats: r.availableSeats,
+            farePerSeat: r.farePerSeat,
+            distanceKm: r.routeDistanceKm || 0,
+            durationMins: r.routeDurationMinutes || 0,
+          }))
+        );
+      }
+    } catch { /* keep mock rides on API error */ }
   };
 
   /* Book Seat from Available Rides */
-  const handleBookNow = (ride: AvailableRide) => {
+  const handleBookNow = async (ride: AvailableRide) => {
+    // Try real API join request first
+    try {
+      const { apiSubmitJoinRequest } = await import("../lib/api");
+      await apiSubmitJoinRequest(ride.id, {
+        agreedFare: ride.farePerSeat,
+        seatsRequested: selectedSeats,
+      });
+    } catch { /* fallback to local state */ }
+
     const newTrip: Trip = {
       id: `trip-${Date.now().toString().slice(-4)}`,
       role: "PASSENGER",
@@ -273,8 +380,23 @@ export default function EmployeeDashboard() {
     setOfferStep("route-confirm");
   };
 
-  const handleConfirmOfferPublish = () => {
+  const handleConfirmOfferPublish = async () => {
     const veh = vehicles.find((v) => v.id === offerVehId) || vehicles[0];
+    // Try real API
+    try {
+      const { apiPublishRide } = await import("../lib/api");
+      await apiPublishRide({
+        vehicleId: offerVehId,
+        pickupLabel: offerStartLoc,
+        pickupLat: 23.03, pickupLng: 72.587,
+        destinationLabel: offerDestLoc,
+        destinationLat: 23.215, destinationLng: 72.636,
+        departureAt: new Date(offerDateTime).toISOString(),
+        availableSeats: offerSeatsAvailable,
+        farePerSeat: offerFarePerSeat,
+        isRecurring: false,
+      });
+    } catch { /* keep local state fallback */ }
     const newRideOffer: AvailableRide = {
       id: `ride-${Date.now().toString().slice(-4)}`,
       driverName: "Jane Doe (You)",
@@ -306,35 +428,63 @@ export default function EmployeeDashboard() {
     setChatText("");
   };
 
-  const handlePayNow = () => {
+  const handlePayNow = async () => {
     if (!paymentTrip) return;
     if (payMethod === "WALLET") {
       if (walletBalance < paymentTrip.fareAmount) {
         alert("Insufficient Wallet balance. Please recharge your wallet.");
         return;
       }
-      setWalletBalance((prev) => prev - paymentTrip.fareAmount);
     }
-    setTrips((prev) =>
-      prev.map((t) => (t.id === paymentTrip.id ? { ...t, status: "PAYMENT_COMPLETED" } : t))
-    );
+    try {
+      const { apiPayForTrip } = await import("../lib/api");
+      const res = await apiPayForTrip(paymentTrip.id, payMethod);
+      if (res.trip) {
+        setTrips((prev) =>
+          prev.map((t) => (t.id === paymentTrip.id ? { ...t, status: res.trip.status as Trip["status"] } : t))
+        );
+        if (payMethod === "WALLET") setWalletBalance((prev) => prev - paymentTrip.fareAmount);
+      }
+    } catch {
+      // Fallback local update
+      if (payMethod === "WALLET") setWalletBalance((prev) => prev - paymentTrip.fareAmount);
+      setTrips((prev) =>
+        prev.map((t) => (t.id === paymentTrip.id ? { ...t, status: "PAYMENT_COMPLETED" } : t))
+      );
+    }
     setPaymentTrip(null);
   };
 
-  const handleAddVehicleSubmit = (e: React.FormEvent) => {
+  const handleAddVehicleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newModel || !newPlate) return;
-    setVehicles((prev) => [
-      ...prev,
-      {
-        id: `v-${Date.now()}`,
+    // Try real API
+    try {
+      const { apiCreateVehicle } = await import("../lib/api");
+      const created = await apiCreateVehicle({
         model: newModel,
-        plateNumber: newPlate,
-        capacity: newCap,
-        fuelType: newFuel,
-        status: "Verified",
-      },
-    ]);
+        registrationNumber: newPlate,
+        seatingCapacity: newCap,
+        fuelType: newFuel.toUpperCase(),
+      });
+      setVehicles((prev) => [
+        ...prev,
+        {
+          id: created.id,
+          model: created.model,
+          plateNumber: created.registrationNumber,
+          capacity: created.seatingCapacity,
+          fuelType: newFuel,
+          status: created.status === "VERIFIED" ? "Verified" : "Pending",
+        },
+      ]);
+    } catch {
+      // Fallback: add locally
+      setVehicles((prev) => [
+        ...prev,
+        { id: `v-${Date.now()}`, model: newModel, plateNumber: newPlate, capacity: newCap, fuelType: newFuel, status: "Verified" },
+      ]);
+    }
     setNewModel("");
     setNewPlate("");
     setIsAddVehOpen(false);

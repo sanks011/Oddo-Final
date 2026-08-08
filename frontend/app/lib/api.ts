@@ -1,17 +1,21 @@
 /**
- * Enterprise Carpooling Platform — API Client Utility
- * Handles REST requests to http://localhost:3000/api/v1 with JWT Bearer authentication.
+ * Enterprise Carpooling Platform — API Client
+ * Backend: https://windows-virus-dsufygbauygroyiausgfiysrgf.onrender.com/api/v1
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api/v1";
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "https://windows-virus-dsufygbauygroyiausgfiysrgf.onrender.com/api/v1";
 
-/* ── Helpers to manage tokens ───────────────────────── */
+/* ── Token helpers ─────────────────────────────────── */
 export function getAccessToken(): string | null {
   if (typeof document === "undefined") return null;
-  return document.cookie
-    .split("; ")
-    .find((row) => row.startsWith("access-token="))
-    ?.split("=")[1] || null;
+  return (
+    document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("access-token="))
+      ?.split("=")[1] || null
+  );
 }
 
 export function setTokens(accessToken: string, refreshToken?: string) {
@@ -27,15 +31,16 @@ export function clearTokens() {
   document.cookie = "access-token=; path=/; max-age=0";
   document.cookie = "refresh-token=; path=/; max-age=0";
   document.cookie = "auth-token=; path=/; max-age=0";
+  document.cookie = "super-admin-auth=; path=/; max-age=0";
 }
 
-/* ── Base Fetch Wrapper ─────────────────────────────── */
+/* ── Base fetch wrapper ─────────────────────────────── */
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {},
   customToken?: string
 ): Promise<T> {
-  const token = customToken || getAccessToken();
+  const token = customToken ?? getAccessToken();
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
   };
@@ -43,7 +48,6 @@ async function fetchApi<T>(
   if (!(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
-
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -53,17 +57,25 @@ async function fetchApi<T>(
     headers,
   });
 
-  const data = await response.json().catch(() => ({}));
+  const text = await response.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch { data = {}; }
 
   if (!response.ok) {
-    const errorMsg = data?.message || data?.errors?.[0]?.message || `Request failed with status ${response.status}`;
-    throw new Error(errorMsg);
+    const msg =
+      data?.message ||
+      data?.errors?.[0]?.message ||
+      `Request failed: ${response.status}`;
+    throw new Error(msg);
   }
 
   return data as T;
 }
 
-/* ── Auth Module API Calls ─────────────────────────── */
+/* ════════════════════════════════════════════════════
+   MODULE 1 — AUTH
+   ════════════════════════════════════════════════════ */
+
 export async function apiLogin(email: string, password: string) {
   const data = await fetchApi<{
     accessToken: string;
@@ -75,6 +87,7 @@ export async function apiLogin(email: string, password: string) {
       lastName: string;
       role: "SUPER_ADMIN" | "ORG_ADMIN" | "USER";
       orgId?: string;
+      orgSlug?: string;
       verificationStatus: "APPROVED" | "PENDING" | "REJECTED";
     };
   }>("/auth/login", {
@@ -82,9 +95,7 @@ export async function apiLogin(email: string, password: string) {
     body: JSON.stringify({ email, password }),
   });
 
-  if (data.accessToken) {
-    setTokens(data.accessToken, data.refreshToken);
-  }
+  if (data.accessToken) setTokens(data.accessToken, data.refreshToken);
   return data;
 }
 
@@ -99,14 +110,7 @@ export async function apiRegisterUser(payload: {
 }) {
   return fetchApi<{
     message: string;
-    user: {
-      id: string;
-      email: string;
-      firstName: string;
-      lastName: string;
-      role: string;
-      verificationStatus: string;
-    };
+    user: { id: string; email: string; verificationStatus: string };
     pendingToken: string;
   }>("/auth/register", {
     method: "POST",
@@ -117,32 +121,43 @@ export async function apiRegisterUser(payload: {
 export async function apiUploadIdProof(pendingToken: string, file: File) {
   const formData = new FormData();
   formData.append("idProof", file);
-
-  return fetchApi<{
-    message: string;
-    userId: string;
-    verificationStatus: string;
-  }>(
+  return fetchApi<{ message: string; userId: string; verificationStatus: string }>(
     "/auth/register/id-proof",
-    {
-      method: "POST",
-      body: formData,
-    },
+    { method: "POST", body: formData },
     pendingToken
   );
 }
 
-/* ── Organization Module API Calls ───────────────────── */
-export async function apiListOrganizations() {
-  return fetchApi<
-    Array<{
-      id: string;
-      name: string;
-      slug?: string;
-      status?: string;
-      _count?: { users: number };
-    }>
-  >("/orgs");
+export async function apiRefreshToken(refreshToken: string) {
+  return fetchApi<{ accessToken: string }>("/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
+  });
+}
+
+export async function apiLogout(refreshToken: string) {
+  return fetchApi<{ message: string }>("/auth/logout", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
+  });
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 2 — ORGANIZATIONS
+   ════════════════════════════════════════════════════ */
+
+export interface OrgData {
+  id: string;
+  name: string;
+  slug?: string;
+  status?: string;
+  fuelCostPerLitre?: number;
+  costPerKmDefault?: number;
+  _count?: { users: number };
+}
+
+export async function apiListOrganizations(): Promise<OrgData[]> {
+  return fetchApi<OrgData[]>("/orgs");
 }
 
 export async function apiCreateOrganization(payload: {
@@ -151,13 +166,8 @@ export async function apiCreateOrganization(payload: {
   fuelCostPerLitre?: number;
   costPerKmDefault?: number;
   status?: string;
-}) {
-  return fetchApi<{
-    id: string;
-    name: string;
-    slug?: string;
-    status?: string;
-  }>("/orgs", {
+}): Promise<OrgData> {
+  return fetchApi<OrgData>("/orgs", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -173,16 +183,10 @@ export async function apiProvisionOrgAdmin(
     phone: string;
   }
 ) {
-  return fetchApi<{
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-  }>(`/orgs/${orgId}/admins`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return fetchApi<{ id: string; email: string; role: string }>(
+    `/orgs/${orgId}/admins`,
+    { method: "POST", body: JSON.stringify(payload) }
+  );
 }
 
 export async function apiUpdateOrgSettings(
@@ -203,39 +207,453 @@ export async function apiUpdateOrgSettings(
   });
 }
 
-/* ── User & Approvals Module API Calls ──────────────── */
-export async function apiGetPendingUsers(orgId?: string) {
+/* ════════════════════════════════════════════════════
+   MODULE 3 — USERS
+   ════════════════════════════════════════════════════ */
+
+export interface UserData {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  fullName?: string;
+  name?: string;
+  phone?: string;
+  employeeId?: string;
+  role: string;
+  department?: string;
+  orgId?: string;
+  verificationStatus: string;
+  status?: string;
+  carpoolAccess?: boolean;
+  rating?: number;
+  totalRides?: number;
+  idProofPath?: string;
+  idProofUploadedAt?: string;
+}
+
+export async function apiGetPendingUsers(orgId?: string): Promise<UserData[]> {
   const query = orgId ? `?orgId=${orgId}` : "";
-  return fetchApi<
-    Array<{
-      id: string;
-      email: string;
-      firstName: string;
-      lastName: string;
-      employeeId?: string;
-      department?: string;
-      verificationStatus: string;
-      idProofPath?: string;
-      idProofUploadedAt?: string;
-    }>
-  >(`/users/pending${query}`);
+  return fetchApi<UserData[]>(`/users/pending${query}`);
+}
+
+export async function apiListUsers(orgId?: string): Promise<UserData[]> {
+  const query = orgId ? `?orgId=${orgId}` : "";
+  return fetchApi<UserData[]>(`/users${query}`);
+}
+
+export async function apiGetUser(userId: string): Promise<UserData> {
+  return fetchApi<UserData>(`/users/${userId}`);
+}
+
+export async function apiUpdateUser(
+  userId: string,
+  payload: Partial<{ firstName: string; lastName: string; phone: string; carpoolAccess: boolean }>
+) {
+  return fetchApi<UserData>(`/users/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function apiApproveUser(userId: string) {
   return fetchApi<{ message: string; user: { id: string; verificationStatus: string } }>(
     `/users/${userId}/approve`,
-    {
-      method: "PATCH",
-    }
+    { method: "PATCH" }
   );
 }
 
 export async function apiRejectUser(userId: string, rejectionReason: string) {
   return fetchApi<{ message: string; user: { id: string; verificationStatus: string } }>(
     `/users/${userId}/reject`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ rejectionReason }),
-    }
+    { method: "PATCH", body: JSON.stringify({ rejectionReason }) }
   );
+}
+
+export function getIdProofUrl(userId: string): string {
+  return `${API_BASE_URL}/users/${userId}/id-proof`;
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 4 — VEHICLES
+   ════════════════════════════════════════════════════ */
+
+export interface VehicleData {
+  id: string;
+  model: string;
+  registrationNumber: string;
+  seatingCapacity: number;
+  fuelType: "PETROL" | "DIESEL" | "ELECTRIC" | "HYBRID";
+  status: "VERIFIED" | "PENDING" | "REJECTED";
+  ownerId?: string;
+}
+
+export async function apiListVehicles(): Promise<VehicleData[]> {
+  return fetchApi<VehicleData[]>("/vehicles");
+}
+
+export async function apiCreateVehicle(payload: {
+  model: string;
+  registrationNumber: string;
+  seatingCapacity: number;
+  fuelType: string;
+}): Promise<VehicleData> {
+  return fetchApi<VehicleData>("/vehicles", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiUpdateVehicle(
+  vehicleId: string,
+  payload: Partial<{ model: string; seatingCapacity: number }>
+): Promise<VehicleData> {
+  return fetchApi<VehicleData>(`/vehicles/${vehicleId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiDeleteVehicle(vehicleId: string) {
+  return fetchApi<{ message: string }>(`/vehicles/${vehicleId}`, {
+    method: "DELETE",
+  });
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 5 — SAVED PLACES
+   ════════════════════════════════════════════════════ */
+
+export interface SavedPlaceData {
+  id: string;
+  label: string;
+  address: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export async function apiListSavedPlaces(): Promise<SavedPlaceData[]> {
+  return fetchApi<SavedPlaceData[]>("/settings/saved-places");
+}
+
+export async function apiCreateSavedPlace(payload: {
+  label: string;
+  address: string;
+  latitude?: number;
+  longitude?: number;
+}): Promise<SavedPlaceData> {
+  return fetchApi<SavedPlaceData>("/settings/saved-places", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiDeleteSavedPlace(placeId: string) {
+  return fetchApi<{ message: string }>(`/settings/saved-places/${placeId}`, {
+    method: "DELETE",
+  });
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 6 — RIDES
+   ════════════════════════════════════════════════════ */
+
+export interface RideData {
+  id: string;
+  driverId: string;
+  driver?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    rating?: number;
+  };
+  vehicle?: { id: string; model: string; registrationNumber: string };
+  vehicleId?: string;
+  pickupLabel: string;
+  pickupLat: number;
+  pickupLng: number;
+  destinationLabel: string;
+  destinationLat: number;
+  destinationLng: number;
+  departureAt: string;
+  availableSeats: number;
+  farePerSeat: number;
+  status: string;
+  routeDistanceKm?: number;
+  routeDurationMinutes?: number;
+  routeGeometry?: string;
+  isRecurring?: boolean;
+  orgId?: string;
+}
+
+export async function apiSearchRides(payload: {
+  pickupLat: number;
+  pickupLng: number;
+  pickupLabel: string;
+  destinationLat: number;
+  destinationLng: number;
+  destinationLabel: string;
+  departureDate: string;
+  departureTime?: string;
+  seatsNeeded: number;
+  isRecurring?: boolean;
+}): Promise<{ searchRoute: { distanceKm: number; durationMinutes: number; routeGeometry?: string }; rides: RideData[] }> {
+  return fetchApi("/rides/search", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiPublishRide(payload: {
+  vehicleId: string;
+  pickupLabel: string;
+  pickupLat: number;
+  pickupLng: number;
+  destinationLabel: string;
+  destinationLat: number;
+  destinationLng: number;
+  departureAt: string;
+  availableSeats: number;
+  farePerSeat: number;
+  isRecurring?: boolean;
+}): Promise<RideData> {
+  return fetchApi<RideData>("/rides", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiGetRide(rideId: string): Promise<RideData> {
+  return fetchApi<RideData>(`/rides/${rideId}`);
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 7 — JOIN REQUESTS
+   ════════════════════════════════════════════════════ */
+
+export async function apiSubmitJoinRequest(
+  rideId: string,
+  payload: { agreedFare: number; seatsRequested: number; initiatedBy?: string }
+) {
+  return fetchApi(`/rides/${rideId}/join-requests`, {
+    method: "POST",
+    body: JSON.stringify({ initiatedBy: "PASSENGER", ...payload }),
+  });
+}
+
+export async function apiGetJoinRequests(rideId: string) {
+  return fetchApi(`/rides/${rideId}/join-requests`);
+}
+
+export async function apiAcceptJoinRequest(rideId: string, requestId: string) {
+  return fetchApi(`/rides/${rideId}/join-requests/${requestId}/accept`, {
+    method: "PATCH",
+  });
+}
+
+export async function apiDeclineJoinRequest(rideId: string, requestId: string) {
+  return fetchApi(`/rides/${rideId}/join-requests/${requestId}/decline`, {
+    method: "PATCH",
+  });
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 8 — TRIPS
+   ════════════════════════════════════════════════════ */
+
+export interface TripData {
+  id: string;
+  status: string;
+  rideId: string;
+  callerRole?: "DRIVER" | "PASSENGER";
+  ride?: {
+    pickupLabel: string;
+    pickupLat?: number;
+    pickupLng?: number;
+    destinationLabel: string;
+    destinationLat?: number;
+    destinationLng?: number;
+    departureAt: string;
+    farePerSeat: number;
+    routeDistanceKm?: number;
+    routeDurationMinutes?: number;
+    routeGeometry?: string;
+    vehicle?: { model: string; registrationNumber: string };
+  };
+  driver?: { id: string; firstName: string; lastName: string; phone?: string };
+  passengers?: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    seatsBooked: number;
+    fareAmount: number;
+    paymentStatus?: string;
+  }>;
+  fareAmount?: number;
+}
+
+export async function apiGetMyTrips(): Promise<TripData[]> {
+  return fetchApi<TripData[]>("/trips");
+}
+
+export async function apiGetTrip(tripId: string): Promise<TripData> {
+  return fetchApi<TripData>(`/trips/${tripId}`);
+}
+
+export async function apiUpdateTripStatus(
+  tripId: string,
+  status: string
+): Promise<{ message: string; trip: { id: string; status: string } }> {
+  return fetchApi(`/trips/${tripId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function apiGetTripHistory(page = 1, limit = 20) {
+  return fetchApi<{ total: number; page: number; limit: number; trips: TripData[] }>(
+    `/trips/history?page=${page}&limit=${limit}`
+  );
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 9 — LIVE TRACKING (REST fallback)
+   ════════════════════════════════════════════════════ */
+
+export async function apiGetTripLocation(tripId: string) {
+  return fetchApi<{
+    tripId: string;
+    status: string;
+    latestLocation?: { lat: number; lng: number; recordedAt: string };
+    routeGeometry?: string;
+    routeDistanceKm?: number;
+    routeDurationMinutes?: number;
+  }>(`/trips/${tripId}/location`);
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 10 — CHAT (REST)
+   ════════════════════════════════════════════════════ */
+
+export interface MessageData {
+  id: string;
+  tripId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+  sender?: { firstName: string; lastName: string; role: string };
+}
+
+export async function apiGetMessages(tripId: string, page = 1): Promise<MessageData[]> {
+  return fetchApi<MessageData[]>(`/trips/${tripId}/messages?page=${page}&limit=50`);
+}
+
+export async function apiSendMessage(tripId: string, content: string): Promise<MessageData> {
+  return fetchApi<MessageData>(`/trips/${tripId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 11 — WALLET & PAYMENTS
+   ════════════════════════════════════════════════════ */
+
+export interface WalletData {
+  id: string;
+  userId: string;
+  balance: number;
+  transactions: Array<{
+    id: string;
+    type: "CREDIT" | "DEBIT";
+    amount: number;
+    description: string;
+    createdAt: string;
+  }>;
+}
+
+export async function apiGetWallet(): Promise<WalletData> {
+  return fetchApi<WalletData>("/wallet");
+}
+
+export async function apiRechargeWallet(amount: number) {
+  return fetchApi<{ orderId: string; amount: number; currency: string; keyId: string }>(
+    "/wallet/recharge",
+    { method: "POST", body: JSON.stringify({ amount }) }
+  );
+}
+
+export async function apiVerifyRecharge(payload: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  amount: number;
+}) {
+  return fetchApi<{ message: string; balance: number }>("/wallet/recharge/verify", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiPayForTrip(
+  tripId: string,
+  method: "WALLET" | "CASH" | "CARD" | "UPI"
+) {
+  return fetchApi<{
+    message: string;
+    payment: { id: string; amount: number; status: string; method: string };
+    trip: { id: string; status: string };
+  }>(`/payments/trips/${tripId}/pay`, {
+    method: "POST",
+    body: JSON.stringify({ method }),
+  });
+}
+
+/* ════════════════════════════════════════════════════
+   MODULE 12 — REPORTS
+   ════════════════════════════════════════════════════ */
+
+export async function apiGetReportSummary(startDate?: string, endDate?: string) {
+  const q = new URLSearchParams();
+  if (startDate) q.set("startDate", startDate);
+  if (endDate) q.set("endDate", endDate);
+  return fetchApi<{ orgId: string; totalTrips: number; totalDistanceKm: number; dateRange: object }>(
+    `/reports/summary?${q.toString()}`
+  );
+}
+
+export async function apiGetFuelReport() {
+  return fetchApi<{
+    orgId: string;
+    orgName: string;
+    totalDistanceKm: number;
+    estimatedFuelLitres: number;
+    estimatedTotalFuelCost: number;
+    fuelCostPerLitre: number;
+    assumedKmPerLitre: number;
+  }>("/reports/fuel");
+}
+
+export async function apiGetCostPerKmReport() {
+  return fetchApi<{
+    orgId: string;
+    costPerKmDefault: number;
+    derivedFuelCostPerKm: number;
+    fuelCostPerLitre: number;
+  }>("/reports/cost-per-km");
+}
+
+export async function apiGetVehicleCostReport() {
+  return fetchApi<
+    Array<{
+      vehicleId: string;
+      model: string;
+      registrationNumber: string;
+      totalTrips: number;
+      totalDistanceKm: number;
+      estimatedFuelCost: number;
+    }>
+  >("/reports/vehicle-cost");
 }

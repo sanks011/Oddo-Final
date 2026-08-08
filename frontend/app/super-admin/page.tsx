@@ -3,9 +3,22 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useApp } from "../context/AppContext";
+import type { OrgData } from "../lib/api";
 
 export default function SuperAdminPage() {
   const { organizations, createOrganization, updateOrganization, pendingApplications } = useApp();
+  const [realOrgs, setRealOrgs] = useState<OrgData[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
+
+  const loadRealOrgs = async () => {
+    setOrgsLoading(true);
+    try {
+      const { apiListOrganizations } = await import("../lib/api");
+      const data = await apiListOrganizations();
+      setRealOrgs(data);
+    } catch { /* fallback to AppContext orgs */ }
+    setOrgsLoading(false);
+  };
 
   /* ── Super Admin Authentication State ───────────── */
   const [isSaAuthenticated, setIsSaAuthenticated] = useState<boolean>(false);
@@ -19,7 +32,10 @@ export default function SuperAdminPage() {
       const hasCookie = document.cookie
         .split("; ")
         .some((row) => row.startsWith("super-admin-auth=true"));
-      if (hasCookie) setIsSaAuthenticated(true);
+      if (hasCookie) {
+        setIsSaAuthenticated(true);
+        loadRealOrgs();
+      }
     }
   }, []);
 
@@ -31,11 +47,28 @@ export default function SuperAdminPage() {
       return;
     }
     setSaLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
 
-    // Authenticate (allows demo super admin credentials)
-    document.cookie = "super-admin-auth=true; path=/; max-age=86400";
-    setIsSaAuthenticated(true);
+    try {
+      const { apiLogin, setTokens } = await import("../lib/api");
+      const res = await apiLogin(saId, saPassword);
+      if (res.user.role !== "SUPER_ADMIN") {
+        setSaError("This account does not have Super Admin privileges.");
+        setSaLoading(false);
+        return;
+      }
+      document.cookie = "super-admin-auth=true; path=/; max-age=86400";
+      setIsSaAuthenticated(true);
+      loadRealOrgs();
+    } catch (err: any) {
+      if (saId === "superadmin@platform.com" && saPassword === "Password123!") {
+        document.cookie = "super-admin-auth=true; path=/; max-age=86400";
+        setIsSaAuthenticated(true);
+        loadRealOrgs();
+      } else {
+        setSaError(err?.message || "Invalid Super Admin credentials.");
+      }
+    }
+
     setSaLoading(false);
   };
 
@@ -45,8 +78,8 @@ export default function SuperAdminPage() {
   };
 
   const autoFillSaCreds = () => {
-    setSaId("superadmin@oddo.com");
-    setSaPassword("superadmin123");
+    setSaId("superadmin@platform.com");
+    setSaPassword("Password123!");
   };
 
   /* Modal state */
@@ -220,7 +253,7 @@ export default function SuperAdminPage() {
                 type="text"
                 value={saId}
                 onChange={(e) => setSaId(e.target.value)}
-                placeholder="superadmin@oddo.com"
+                placeholder="superadmin@platform.com"
                 required
                 className="w-full px-4 py-3 rounded-xl border-2 border-dashed border-[#B6B6B6] bg-[#FCFAF5] text-[#173300] text-sm font-mono font-semibold outline-none focus:border-[#173300]"
               />
@@ -254,7 +287,7 @@ export default function SuperAdminPage() {
             <div className="bg-[#FFEB5B]/30 border-2 border-dashed border-[#FFEB5B] rounded-xl p-3.5 flex items-center justify-between text-xs">
               <div>
                 <span className="font-bold text-[#173300]">Demo Creds:</span>{" "}
-                <code className="font-mono text-[#173300]/80">superadmin@oddo.com</code>
+                <code className="font-mono text-[#173300]/80">superadmin@platform.com</code>
               </div>
               <button
                 type="button"

@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, use, useEffect } from "react";
 import Link from "next/link";
 import { useApp, Vehicle } from "../../context/AppContext";
+import type { UserData, VehicleData } from "../../lib/api";
+import { API_BASE_URL } from "../../lib/api";
 
 type AdminTab =
   | "overview"
@@ -45,9 +47,33 @@ export default function OrgAdminDashboard({
     status: "Active" as const,
   };
 
+  /* ── Real API data state ─────────────────────────── */
+  const [apiPendingUsers, setApiPendingUsers] = useState<UserData[]>([]);
+  const [apiEmployees, setApiEmployees] = useState<UserData[]>([]);
+  const [apiVehicles, setApiVehicles] = useState<VehicleData[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setDataLoading(true);
+      try {
+        const { apiGetPendingUsers, apiListUsers, apiListVehicles } = await import("../../lib/api");
+        const [pending, emps] = await Promise.all([
+          apiGetPendingUsers().catch(() => [] as UserData[]),
+          apiListUsers().catch(() => [] as UserData[]),
+        ]);
+        setApiPendingUsers(pending);
+        setApiEmployees(emps.filter((u) => u.verificationStatus === "APPROVED"));
+      } catch {}
+      setDataLoading(false);
+    };
+    loadData();
+  }, [orgSlug]);
+
+  /* Fallback to AppContext data if API returns empty */
   const orgApps = pendingApplications.filter((a) => a.orgSlug === orgSlug || a.orgSlug === "acme-corp");
-  const pendingApps = orgApps.filter((a) => a.status === "pending");
-  const orgEmps = employees.filter((e) => e.orgSlug === orgSlug || e.orgSlug === "acme-corp");
+  const pendingApps = apiPendingUsers.length > 0 ? apiPendingUsers : orgApps.filter((a) => a.status === "pending");
+  const orgEmps = apiEmployees.length > 0 ? apiEmployees : employees.filter((e) => e.orgSlug === orgSlug || e.orgSlug === "acme-corp");
   const orgVehs = vehicles.filter((v) => v.orgSlug === orgSlug || v.orgSlug === "acme-corp");
 
   const orgConfig = configs[orgSlug] || {
@@ -66,6 +92,7 @@ export default function OrgAdminDashboard({
     try {
       const { apiApproveUser } = await import("../../lib/api");
       await apiApproveUser(appId);
+      setApiPendingUsers((prev) => prev.filter((u) => u.id !== appId));
     } catch {}
     approveApplication(appId);
   };
@@ -79,6 +106,7 @@ export default function OrgAdminDashboard({
       try {
         const { apiRejectUser } = await import("../../lib/api");
         await apiRejectUser(appId, reason);
+        setApiPendingUsers((prev) => prev.filter((u) => u.id !== appId));
       } catch {}
       rejectApplication(appId);
     }
@@ -87,6 +115,7 @@ export default function OrgAdminDashboard({
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [empSearch, setEmpSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
+
 
   /* Modals state */
   const [isAddEmpOpen, setIsAddEmpOpen] = useState(false);
@@ -155,12 +184,13 @@ export default function OrgAdminDashboard({
   const companySubsidyPerRide = (costPerRideNoSubsidy * orgConfig.subsidyPercent) / 100;
   const employeePayPerRide = costPerRideNoSubsidy - companySubsidyPerRide;
 
-  const filteredEmployees = orgEmps.filter((e) => {
+  const filteredEmployees = orgEmps.filter((e: any) => {
+    const displayName = e.name || `${e.firstName || ""} ${e.lastName || ""}`.trim();
     const matchesSearch =
-      e.name.toLowerCase().includes(empSearch.toLowerCase()) ||
-      e.employeeId.toLowerCase().includes(empSearch.toLowerCase()) ||
-      e.email.toLowerCase().includes(empSearch.toLowerCase());
-    const matchesDept = deptFilter === "All" || e.department === deptFilter;
+      displayName.toLowerCase().includes(empSearch.toLowerCase()) ||
+      (e.employeeId || "").toLowerCase().includes(empSearch.toLowerCase()) ||
+      (e.email || "").toLowerCase().includes(empSearch.toLowerCase());
+    const matchesDept = deptFilter === "All" || (e.department || "") === deptFilter;
     return matchesSearch && matchesDept;
   });
 
@@ -282,10 +312,10 @@ export default function OrgAdminDashboard({
                   Total Active Employees
                 </span>
                 <div className="text-3xl font-extrabold font-heading text-[#173300] mt-2">
-                  {orgEmps.filter((e) => e.status === "Active").length}
+                  {(orgEmps as any[]).filter((e) => e.status === "Active" || e.verificationStatus === "APPROVED").length}
                 </div>
                 <span className="text-xs text-emerald-800 bg-emerald-100 font-semibold px-2 py-0.5 rounded-full mt-2 inline-block">
-                  {orgEmps.filter((e) => e.carpoolAccess).length} Carpool Enabled
+                  {(orgEmps as any[]).filter((e) => e.carpoolAccess).length} Carpool Enabled
                 </span>
               </div>
 
@@ -379,39 +409,43 @@ export default function OrgAdminDashboard({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {pendingApps.map((app) => (
-                      <div
-                        key={app.id}
-                        className="bg-[#173300]/[0.03] border-2 border-dashed border-[#B6B6B6] rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
-                      >
-                        <div>
-                          <div className="font-bold text-sm text-[#173300]">
-                            {app.fullName}{" "}
-                            <span className="text-xs font-mono text-[#173300]/60 font-normal">
-                              ({app.employeeId})
-                            </span>
+                    {pendingApps.map((app) => {
+                      const appName = app.fullName || `${(app as UserData).firstName || ""} ${(app as UserData).lastName || ""}`.trim() || app.email;
+                      const appDept = app.department || "General";
+                      return (
+                        <div
+                          key={app.id}
+                          className="bg-[#173300]/[0.03] border-2 border-dashed border-[#B6B6B6] rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
+                        >
+                          <div>
+                            <div className="font-bold text-sm text-[#173300]">
+                              {appName}{" "}
+                              <span className="text-xs font-mono text-[#173300]/60 font-normal">
+                                ({app.employeeId || "N/A"})
+                              </span>
+                            </div>
+                            <div className="text-xs text-[#173300]/60 font-mono mt-0.5">
+                              {app.email} • {appDept}
+                            </div>
                           </div>
-                          <div className="text-xs text-[#173300]/60 font-mono mt-0.5">
-                            {app.email} • {app.department}
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleRejectUser(app.id)}
-                            className="px-3 py-1.5 rounded-lg border border-red-300 bg-red-50 text-red-700 font-bold text-xs hover:bg-red-100 transition-colors"
-                          >
-                            Reject
-                          </button>
-                          <button
-                            onClick={() => handleApproveUser(app.id)}
-                            className="px-4 py-1.5 rounded-lg border-2 border-[#173300] bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[2px_2px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                          >
-                            Grant Access
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleRejectUser(app.id)}
+                              className="px-3 py-1.5 rounded-lg border border-red-300 bg-red-50 text-red-700 font-bold text-xs hover:bg-red-100 transition-colors"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              onClick={() => handleApproveUser(app.id)}
+                              className="px-4 py-1.5 rounded-lg border-2 border-[#173300] bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[2px_2px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                            >
+                              Grant Access
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -592,51 +626,57 @@ export default function OrgAdminDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-dashed divide-[#B6B6B6]/50 text-xs">
-                    {filteredEmployees.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-[#173300]/[0.02]">
-                        <td className="py-3.5 px-3">
-                          <div className="font-bold text-sm text-[#173300]">{emp.name}</div>
-                          <div className="text-[11px] text-[#173300]/60">{emp.email}</div>
-                        </td>
+                    {filteredEmployees.map((emp) => {
+                      const empName = emp.name || `${(emp as UserData).firstName || ""} ${(emp as UserData).lastName || ""}`.trim() || emp.email;
+                      const empDept = emp.department || "General";
+                      const empStatus = emp.status || ((emp as UserData).verificationStatus === "APPROVED" ? "Active" : (emp as UserData).verificationStatus || "Active");
+                      const empTotalRides = emp.totalRides ?? 0;
+                      return (
+                        <tr key={emp.id} className="hover:bg-[#173300]/[0.02]">
+                          <td className="py-3.5 px-3">
+                            <div className="font-bold text-sm text-[#173300]">{empName}</div>
+                            <div className="text-[11px] text-[#173300]/60">{emp.email}</div>
+                          </td>
 
-                        <td className="py-3.5 px-3 font-mono font-bold">{emp.employeeId}</td>
+                          <td className="py-3.5 px-3 font-mono font-bold">{emp.employeeId || "N/A"}</td>
 
-                        <td className="py-3.5 px-3">
-                          <div className="font-semibold text-[#173300]">{emp.department}</div>
-                          <div className="text-[11px] text-[#173300]/60">{emp.role}</div>
-                        </td>
+                          <td className="py-3.5 px-3">
+                            <div className="font-semibold text-[#173300]">{empDept}</div>
+                            <div className="text-[11px] text-[#173300]/60">{emp.role}</div>
+                          </td>
 
-                        <td className="py-3.5 px-3 text-center">
-                          <span
-                            className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${
-                              emp.status === "Active"
-                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                : "bg-amber-100 text-amber-800 border-amber-300"
-                            }`}
-                          >
-                            {emp.status}
-                          </span>
-                        </td>
+                          <td className="py-3.5 px-3 text-center">
+                            <span
+                              className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                                empStatus === "Active"
+                                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                  : "bg-amber-100 text-amber-800 border-amber-300"
+                              }`}
+                            >
+                              {empStatus}
+                            </span>
+                          </td>
 
-                        {/* Interactive Access Toggle */}
-                        <td className="py-3.5 px-3 text-center">
-                          <button
-                            onClick={() => toggleEmployeeAccess(emp.id)}
-                            className={`px-3 py-1 rounded-full text-xs font-bold font-mono transition-all border ${
-                              emp.carpoolAccess
-                                ? "bg-[#FFEB5B] text-[#173300] border-[#173300]"
-                                : "bg-gray-100 text-gray-500 border-gray-300"
-                            }`}
-                          >
-                            {emp.carpoolAccess ? "ENABLED" : "DISABLED"}
-                          </button>
-                        </td>
+                          {/* Interactive Access Toggle */}
+                          <td className="py-3.5 px-3 text-center">
+                            <button
+                              onClick={() => toggleEmployeeAccess(emp.id)}
+                              className={`px-3 py-1 rounded-full text-xs font-bold font-mono transition-all border ${
+                                emp.carpoolAccess
+                                  ? "bg-[#FFEB5B] text-[#173300] border-[#173300]"
+                                  : "bg-gray-100 text-gray-500 border-gray-300"
+                              }`}
+                            >
+                              {emp.carpoolAccess ? "ENABLED" : "DISABLED"}
+                            </button>
+                          </td>
 
-                        <td className="py-3.5 px-3 text-right font-mono font-bold text-sm">
-                          {emp.totalRides}
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="py-3.5 px-3 text-right font-mono font-bold text-sm">
+                            {empTotalRides}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
