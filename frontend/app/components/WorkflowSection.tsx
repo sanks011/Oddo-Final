@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
-
 export default function WorkflowSection() {
   return (
-    <section className="w-full pt-10 md:pt-20 lg:pt-37.5 px-4">
+    <section className="w-full pt-2 md:pt-4 px-4">
       <div className="max-w-[1320px] mx-auto space-y-6 md:space-y-10">
         {/* How It Works Header */}
         <img
@@ -16,137 +14,153 @@ export default function WorkflowSection() {
         />
 
         <h2 className="font-heading text-3xl md:text-5xl lg:text-[72px] font-extrabold text-center text-[#173300] leading-[1.2]">
-          Turn meetings, notes, and Figma comments into projects and briefs.
+          Sign up, find your route, and start saving on every trip.
         </h2>
 
         {/* Meeting Flow Banner Graphic */}
         <img
           src="/meeting-flow.png"
-          alt="Workflow showing how meetings become projects and briefs"
+          alt="How carpooling works — find a route, match with riders, ride together"
           width="1320"
           height="240"
           className="w-full h-auto"
         />
       </div>
 
-      {/* Paragraph spans FULL section width — matches saybriefly.com */}
-      <p className="text-black text-lg md:text-2xl lg:text-[34px] text-center leading-relaxed md:leading-10 lg:leading-12 mt-6 md:mt-10">
-        From meetings, notes, to Figma comments, every conversation becomes a structured project or a locked brief. And as the work evolves, SayBriefly makes sure nothing strays from what<span className="relative">you agreed to.<img src="/arrow-to-scope.svg" alt="" width="307" height="236" className="absolute -left-2 top-0 max-w-75 hidden md:block pointer-events-none" /></span> So when things change, you're ready.
+      {/* Full-width paragraph */}
+      <p className="text-black text-lg md:text-2xl lg:text-[34px] text-center leading-relaxed md:leading-10 lg:leading-12 mt-6 md:mt-10 px-4 max-w-[1320px] mx-auto">
+        From finding a nearby driver to negotiating the fare, every step is
+        transparent and in your control. Whether you&apos;re a rider or a
+        driver, Neko-ber makes sure{" "}
+        <span className="relative">
+          every seat is filled
+          <img
+            src="/arrow-to-scope.svg"
+            alt=""
+            width="307"
+            height="236"
+            className="absolute -left-2 top-0 max-w-75 hidden md:block pointer-events-none"
+          />
+        </span>{" "}
+        and every fare is fair.
       </p>
 
-      {/* Scope Section - constrained container */}
+      {/* USP Section */}
       <div className="max-w-[1280px] mx-auto space-y-8 md:space-y-12 px-0">
-        {/* Scope Title Graphics */}
+        {/* Section Badge */}
         <img
           src="/scope-title.svg"
           id="scope"
-          alt="Scope Creep Detection"
+          alt="Negotiate Fares"
           width="212"
           height="43"
           className="mt-10 md:mt-20 lg:mt-46 mx-auto scroll-mt-28"
         />
-        <img
-          src="/scope-eye.png"
-          alt="Scope eye icon"
-          width="124"
-          height="66"
-          className="mx-auto mt-4 mb-6"
-        />
 
         <div className="space-y-4 text-center">
           <h3 className="text-center text-[#173300] text-2xl md:text-4xl lg:text-6xl font-semibold leading-tight">
-            No more scope creep. <br /> No more free rounds of revisions.
+            No fixed fares. <br /> No empty seats. <br /> No commuting alone.
           </h3>
           <p className="w-full md:max-w-2xl lg:w-[800px] mx-auto text-center text-lime-950 text-base md:text-xl lg:text-2xl font-light leading-relaxed">
-            Every conversation your client has with you is measured against the original brief.
+            Riders propose their price, drivers counter — both sides win.
             <br />
-            The moment something changes, you know. Before you've already done the work.
+            Our built-in negotiation engine makes every carpool a fair deal.
           </p>
         </div>
 
         {/* Scope Head Graphic */}
         <img
           src="/scope-head.svg"
-          alt="Scope Head workflow diagram"
+          alt="Carpooling workflow diagram"
           width="1320"
           height="63"
           className="w-full h-auto my-6"
         />
 
-        {/* Screen Demos Row: Meeting & Transcript */}
+        {/* Screen Demos Row */}
         <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-center justify-center">
           <img
             src="/meeting.png"
-            alt="SayBriefly meeting transcription interface"
+            alt="Rider booking interface"
             width="560"
             height="537"
             className="w-full md:w-[45%] h-auto"
           />
           <img
             src="/transcript.png"
-            alt="SayBriefly meeting transcript view"
+            alt="Driver offer and negotiation view"
             width="741"
             height="537"
             className="w-full md:w-[55%] h-auto"
           />
         </div>
 
-        {/* Integration Rows with Dotted Dividers */}
+        {/* Feature Rows */}
         <div className="space-y-10 pt-8">
-          {/* Inbox Row */}
-          <div className="flex flex-col md:flex-row gap-6 md:gap-10 pb-10 border-b border-dotted border-[#DD6C3E]">
+          {/* Book a Ride */}
+          <div className="flex flex-col md:flex-row gap-6 md:gap-10 pb-10 border-b border-[#B6B6B6]/40">
             <div className="w-full md:w-[45%] space-y-3">
               <h4 className="text-[#173300] text-xl md:text-2xl lg:text-3xl font-semibold leading-tight">
-                Even in your <span className="text-sky-600">i</span><span className="text-red-600">n</span><span className="text-amber-400">b</span><span className="text-sky-600">o</span><span className="text-green-600">x</span><span className="text-lime-950">.</span>
+                Find a ride on your exact route.
               </h4>
               <p className="text-[#173300] text-base md:text-lg lg:text-xl font-light leading-relaxed">
-                Client emails are where scope changes sound the most casual. SayBriefly catches them anyway.
+                Enter your pickup and drop-off — Neko-ber matches you with drivers
+                already heading that way. No detours, no wasted time.
               </p>
-              <p className="text-neutral-600 text-base font-light italic">Integrates with Gmail</p>
+              <p className="text-neutral-600 text-base font-light italic">
+                Real-time route matching
+              </p>
             </div>
             <img
               src="/inbox-client.svg"
-              alt="Gmail inbox integration showing scope change detection"
+              alt="Ride booking interface"
               width="741"
               height="127"
               className="w-full md:w-[55%] h-auto"
             />
           </div>
 
-          {/* Figma Row */}
-          <div className="flex flex-col md:flex-row gap-6 md:gap-10 pb-10 border-b border-dotted border-[#DD6C3E]">
+          {/* Offer a Ride */}
+          <div className="flex flex-col md:flex-row gap-6 md:gap-10 pb-10 border-b border-[#B6B6B6]/40">
             <div className="w-full md:w-[45%] space-y-3">
               <h4 className="text-[#173300] text-xl md:text-2xl lg:text-3xl font-semibold leading-tight">
-                We're in Figma too.
+                Offer your seat. Earn on every commute.
               </h4>
               <p className="text-[#173300] text-base md:text-lg lg:text-xl font-light leading-relaxed">
-                SayBriefly monitors every comment against your locked brief and flags anything that wasn't agreed to.
+                Already driving somewhere? List your route, set your preferred
+                fare, and let riders come to you. Turn daily drives into savings.
               </p>
-              <p className="text-neutral-600 text-base font-light italic">Integrates with Figma</p>
+              <p className="text-neutral-600 text-base font-light italic">
+                Driver fare management
+              </p>
             </div>
             <img
               src="/client.png"
-              alt="Figma integration showing comment monitoring"
+              alt="Driver offer interface"
               width="741"
               height="127"
               className="w-full md:w-[55%] h-auto"
             />
           </div>
 
-          {/* Slack Row */}
-          <div className="flex flex-col md:flex-row gap-6 md:gap-10 pb-10 border-b border-dotted border-[#DD6C3E]">
+          {/* Negotiate */}
+          <div className="flex flex-col md:flex-row gap-6 md:gap-10 pb-10 border-b border-[#B6B6B6]/40">
             <div className="w-full md:w-[45%] space-y-3">
               <h4 className="text-[#173300] text-xl md:text-2xl lg:text-3xl font-semibold leading-tight">
-                And in your client's Slack.
+                Negotiate. Our biggest USP.
               </h4>
               <p className="text-[#173300] text-base md:text-lg lg:text-xl font-light leading-relaxed">
-                Scope changes slip into Slack as casual messages. SayBriefly reads every channel before you reply.
+                Unlike any other carpool app — riders can counter a fare,
+                drivers can accept or propose a new price. Both sides chat,
+                agree, and ride. Fair fares, every time.
               </p>
-              <p className="text-neutral-600 text-base font-light italic">Integrates with Slack</p>
+              <p className="text-neutral-600 text-base font-light italic">
+                In-app fare negotiation
+              </p>
             </div>
             <img
               src="/slack-client.png"
-              alt="Slack channel integration showing scope change alerts"
+              alt="Fare negotiation interface"
               width="741"
               height="127"
               className="w-full md:w-[55%] h-auto"
@@ -158,24 +172,25 @@ export default function WorkflowSection() {
         <div className="text-center py-6 space-y-4">
           <img
             src="/flag.png"
-            alt="Briefly flag"
+            alt="Ride confirmed"
             width="192"
             height="192"
             className="mx-auto"
           />
           <p className="text-center text-black text-lg md:text-2xl lg:text-3xl font-normal leading-relaxed max-w-4xl mx-auto">
-            The moment something falls outside your brief, you get a notification with the full context of where it came from. You decide whether to absorb it, bill for it, or push back.
+            The moment a driver accepts your fare, you get a confirmation with
+            pickup details, driver info, and live tracking — all in one place.
           </p>
         </div>
 
-        <hr className="w-full my-12 h-0 border border-dotted border-[#DD6C3E]" />
+        <hr className="w-full my-12 h-0 border border-[#B6B6B6]/30" />
 
-        {/* Annual Protection Headline with /bg.svg Wash */}
+        {/* Impact Stat */}
         <div className="text-center space-y-4 pb-12">
           <h3 className="font-heading text-3xl md:text-5xl lg:text-[68px] font-extrabold text-[#173300] leading-[1.2]">
-            Freelancers using SayBriefly protects{" "}
+            Riders on Neko-ber save{" "}
             <span className="relative inline-block">
-              $3,000+
+              ₹3,000+
               <img
                 src="/bg.svg"
                 alt=""
@@ -184,10 +199,10 @@ export default function WorkflowSection() {
                 className="absolute inset-0 w-full h-full scale-110 -z-10"
               />
             </span>{" "}
-            in billable work annually.
+            on commutes every month.
           </h3>
           <p className="text-center text-[#173300] text-base md:text-xl lg:text-2xl font-light">
-            For a 5-person agency, that's $15,000+ every year.
+            For a team of 5 sharing a route, that&apos;s ₹15,000+ saved monthly.
           </p>
         </div>
       </div>
