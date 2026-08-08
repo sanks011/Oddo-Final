@@ -2,8 +2,8 @@
 
 export default function WorkflowSection() {
   return (
-    <section className="w-full pt-2 md:pt-4 px-4">
-      <div className="max-w-[1320px] mx-auto space-y-6 md:space-y-10">
+    <section className="w-full pt-1 md:pt-2 px-4">
+      <div className="max-w-[1320px] mx-auto space-y-4 md:space-y-6">
         {/* How It Works Header */}
         <img
           src="/how-it-work-title.svg"
@@ -19,16 +19,16 @@ export default function WorkflowSection() {
 
         {/* Meeting Flow Banner Graphic */}
         <img
-          src="/meeting-flow.png"
+          src="/workflow.svg"
           alt="How carpooling works — find a route, match with riders, ride together"
-          width="1320"
-          height="240"
-          className="w-full h-auto"
+          width="10320"
+          height="2040"
+          className="block w-full h-[clamp(420px,56vw,760px)] object-cover object-center"
         />
       </div>
 
       {/* Full-width paragraph */}
-      <p className="text-black text-lg md:text-2xl lg:text-[34px] text-center leading-relaxed md:leading-10 lg:leading-12 mt-6 md:mt-10 px-4 max-w-[1320px] mx-auto">
+      <p className="text-black text-lg md:text-2xl lg:text-[34px] text-center leading-relaxed md:leading-10 lg:leading-12 mt-4 md:mt-6 px-4 max-w-[1320px] mx-auto">
         From finding a nearby driver to negotiating the fare, every step is
         transparent and in your control. Whether you&apos;re a rider or a
         driver, Neko-ber makes sure{" "}
@@ -46,7 +46,7 @@ export default function WorkflowSection() {
       </p>
 
       {/* USP Section */}
-      <div className="max-w-[1280px] mx-auto space-y-8 md:space-y-12 px-0">
+      <div className="max-w-[1280px] mx-auto space-y-6 md:space-y-8 px-0">
         {/* Section Badge */}
         <img
           src="/scope-title.svg"
@@ -54,7 +54,7 @@ export default function WorkflowSection() {
           alt="Negotiate Fares"
           width="212"
           height="43"
-          className="mt-10 md:mt-20 lg:mt-46 mx-auto scroll-mt-28"
+          className="mt-6 md:mt-10 lg:mt-20 mx-auto scroll-mt-28"
         />
 
         <div className="space-y-4 text-center">
@@ -74,11 +74,11 @@ export default function WorkflowSection() {
           alt="Carpooling workflow diagram"
           width="1320"
           height="63"
-          className="w-full h-auto my-6"
+          className="w-full h-auto my-4"
         />
 
         {/* Screen Demos Row */}
-        <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-center justify-center">
+        <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-center justify-center">
           <img
             src="/meeting.png"
             alt="Rider booking interface"
@@ -96,7 +96,7 @@ export default function WorkflowSection() {
         </div>
 
         {/* Feature Rows */}
-        <div className="space-y-10 pt-8">
+        <div className="space-y-8 pt-4">
           {/* Book a Ride */}
           <div className="flex flex-col md:flex-row gap-6 md:gap-10 pb-10 border-b border-[#B6B6B6]/40">
             <div className="w-full md:w-[45%] space-y-3">
@@ -112,7 +112,7 @@ export default function WorkflowSection() {
               </p>
             </div>
             <img
-              src="/inbox-client.svg"
+              src="/inbox-client.png"
               alt="Ride booking interface"
               width="741"
               height="127"
@@ -169,7 +169,7 @@ export default function WorkflowSection() {
         </div>
 
         {/* Flag & Notification Explainer */}
-        <div className="text-center py-6 space-y-4">
+        <div className="text-center py-4 space-y-3">
           <img
             src="/flag.png"
             alt="Ride confirmed"
@@ -183,10 +183,10 @@ export default function WorkflowSection() {
           </p>
         </div>
 
-        <hr className="w-full my-12 h-0 border border-[#B6B6B6]/30" />
+        <hr className="w-full my-8 h-0 border border-[#B6B6B6]/30" />
 
         {/* Impact Stat */}
-        <div className="text-center space-y-4 pb-12">
+        <div className="text-center space-y-3 pb-8">
           <h3 className="font-heading text-3xl md:text-5xl lg:text-[68px] font-extrabold text-[#173300] leading-[1.2]">
             Riders on Neko-ber save{" "}
             <span className="relative inline-block">
