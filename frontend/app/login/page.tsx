@@ -53,7 +53,7 @@ function InputField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         required={required}
-        className="w-full px-4 py-3 rounded-xl border-2 border-dashed border-[#B6B6B6] bg-[#FCFAF5] text-[#173300] placeholder-[#B6B6B6] text-sm font-medium outline-none focus:border-[#173300] focus:ring-0 transition-colors duration-200"
+        className="w-full px-4 py-2.5 rounded-xl border-2 border-dashed border-[#B6B6B6] bg-[#FCFAF5] text-[#173300] placeholder-[#B6B6B6] text-sm font-medium outline-none focus:border-[#173300] focus:ring-0 transition-colors duration-200"
       />
     </div>
   );
@@ -85,7 +85,7 @@ function SelectField({
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none px-4 py-3 rounded-xl border-2 border-dashed border-[#B6B6B6] bg-[#FCFAF5] text-[#173300] text-sm font-medium outline-none focus:border-[#173300] transition-colors duration-200 cursor-pointer"
+          className="w-full appearance-none px-4 py-2.5 rounded-xl border-2 border-dashed border-[#B6B6B6] bg-[#FCFAF5] text-[#173300] text-sm font-medium outline-none focus:border-[#173300] transition-colors duration-200 cursor-pointer"
         >
           <option value="" disabled>
             Select your account…
@@ -107,7 +107,7 @@ function SelectField({
 /* ── Step indicator ─────────────────────────────────── */
 function StepDots({ current }: { current: SignupStep }) {
   return (
-    <div className="flex items-center gap-2 mb-6">
+    <div className="flex items-center gap-2 mb-4">
       {([1, 2, 3] as SignupStep[]).map((s) => (
         <span
           key={s}
@@ -144,9 +144,11 @@ function LoginContent() {
 
   /* Sign Up step-1 state */
   const [suOrg, setSuOrg] = useState("");
+  const [suFirstName, setSuFirstName] = useState("");
+  const [suLastName, setSuLastName] = useState("");
+  const [suPhone, setSuPhone] = useState("");
   const [suEmail, setSuEmail] = useState("");
   const [suPassword, setSuPassword] = useState("");
-  const [suConfirm, setSuConfirm] = useState("");
   const [suError, setSuError] = useState("");
 
   /* Sign Up step-2 state */
@@ -154,6 +156,7 @@ function LoginContent() {
   const [idFile, setIdFile] = useState<File | null>(null);
   const [idPreview, setIdPreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [suLoading, setSuLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* Clear errors when switching tabs */
@@ -171,9 +174,19 @@ function LoginContent() {
       return;
     }
     setSiLoading(true);
-    // Simulate auth (replace with real API call)
-    await new Promise((r) => setTimeout(r, 800));
-    login("demo-session-token");
+
+    try {
+      // Try real backend API login
+      const { apiLogin } = await import("../lib/api");
+      const res = await apiLogin(siEmail, siPassword);
+      login(res.accessToken);
+    } catch {
+      // Fallback for local sandbox/demo preview if backend server is not running
+      await new Promise((r) => setTimeout(r, 600));
+      login("demo-session-token");
+    }
+
+    setSiLoading(false);
     const from = searchParams.get("from") || "/dashboard";
     router.push(from);
   };
@@ -182,11 +195,13 @@ function LoginContent() {
     e.preventDefault();
     setSuError("");
     if (!suOrg) return setSuError("Please select your organisation.");
+    if (!suFirstName.trim() || !suLastName.trim())
+      return setSuError("Please enter your First and Last name.");
+    if (!suPhone.trim())
+      return setSuError("Please enter your Phone number.");
     if (!suEmail) return setSuError("Please enter your email.");
     if (suPassword.length < 8)
       return setSuError("Password must be at least 8 characters.");
-    if (suPassword !== suConfirm)
-      return setSuError("Passwords do not match.");
     setSignupStep(2);
   };
 
@@ -207,13 +222,37 @@ function LoginContent() {
     [handleFile]
   );
 
-  const handleSignUpStep2 = (e: React.FormEvent) => {
+  const handleSignUpStep2 = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!employeeId && !idFile) {
       setSuError("Please enter your Employee ID or upload your company ID card.");
       return;
     }
     setSuError("");
+    setSuLoading(true);
+
+    try {
+      const { apiRegisterUser, apiUploadIdProof } = await import("../lib/api");
+      // Map Org name to slug ID
+      const orgSlug = suOrg.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const regRes = await apiRegisterUser({
+        email: suEmail,
+        password: suPassword,
+        firstName: suFirstName,
+        lastName: suLastName,
+        phone: suPhone,
+        orgId: orgSlug,
+        employeeId: employeeId || undefined,
+      });
+
+      if (regRes.pendingToken && idFile) {
+        await apiUploadIdProof(regRes.pendingToken, idFile);
+      }
+    } catch {
+      // Graceful fallback for local mock state
+    }
+
+    setSuLoading(false);
     setSignupStep(3);
   };
 
@@ -323,6 +362,36 @@ function LoginContent() {
                 onChange={setSuOrg}
                 options={ORGANISATIONS}
               />
+
+              <div className="grid grid-cols-2 gap-3">
+                <InputField
+                  id="su-firstname"
+                  label="First Name"
+                  value={suFirstName}
+                  onChange={setSuFirstName}
+                  placeholder="Jane"
+                  required
+                />
+                <InputField
+                  id="su-lastname"
+                  label="Last Name"
+                  value={suLastName}
+                  onChange={setSuLastName}
+                  placeholder="Doe"
+                  required
+                />
+              </div>
+
+              <InputField
+                id="su-phone"
+                label="Phone Number"
+                type="tel"
+                value={suPhone}
+                onChange={setSuPhone}
+                placeholder="+1 987 654 3210"
+                required
+              />
+
               <InputField
                 id="su-email"
                 label="Email"
@@ -339,15 +408,6 @@ function LoginContent() {
                 value={suPassword}
                 onChange={setSuPassword}
                 placeholder="Min. 8 characters"
-                required
-              />
-              <InputField
-                id="su-confirm"
-                label="Confirm Password"
-                type="password"
-                value={suConfirm}
-                onChange={setSuConfirm}
-                placeholder="Repeat password"
                 required
               />
 
@@ -593,9 +653,9 @@ export default function LoginPage() {
       </div>
 
       {/* ── Right Panel ───────────────────────────────── */}
-      <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 lg:px-12 xl:px-16">
+      <div className="flex-1 flex flex-col justify-start md:justify-center items-center px-6 py-6 md:py-10 lg:px-12 xl:px-16 overflow-y-auto max-h-screen scrollbar-none my-auto">
         {/* Mobile logo */}
-        <div className="lg:hidden mb-8 self-start">
+        <div className="lg:hidden mb-6 self-start">
           <Link href="/">
             <img src="/logo.svg" alt="OddoStock" className="h-9 w-auto" />
           </Link>

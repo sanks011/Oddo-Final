@@ -28,7 +28,7 @@ export default function LandingHero() {
 
           {/* Hero Subhead */}
           <p className="text-black text-base md:text-[20px] text-center w-full max-w-3xl mx-auto leading-relaxed">
-            SayBriefly &amp; OddoStock turn every communication and receiving manifest into tasks, deliverables, and inventory checkpoints. Then monitors every project, meeting, and barcode scan against your locked brief. So you always know what was agreed and what just changed.
+            SayBriefly &amp; Carpool turn every communication and receiving manifest into tasks, deliverables, and inventory checkpoints. Then monitors every project, meeting, and barcode scan against your locked brief. So you always know what was agreed and what just changed.
           </p>
 
           {/* Download & App CTA */}

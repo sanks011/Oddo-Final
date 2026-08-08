@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AgentationWrapper from "./components/AgentationWrapper";
+import { AuthProvider } from "./context/AuthContext";
+import { AppProvider } from "./context/AppContext";
 
 export const metadata: Metadata = {
   title: "Oddo Stock — Sketchbook-Density Inventory Control",
@@ -26,7 +28,11 @@ export default function RootLayout({
         className="min-h-full flex flex-col bg-[#fcfaf5] text-[#1a3300] font-sans selection:bg-[#ffe95c] selection:text-[#1a3300]"
         suppressHydrationWarning
       >
-        {children}
+        <AuthProvider>
+          <AppProvider>
+            {children}
+          </AppProvider>
+        </AuthProvider>
         <AgentationWrapper />
       </body>
     </html>

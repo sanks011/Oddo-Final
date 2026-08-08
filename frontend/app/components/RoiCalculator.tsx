@@ -27,7 +27,7 @@ export default function RoiCalculator() {
               CALCULATE YOUR <span className="highlight-wash border border-[#1a3300]">SAVINGS</span>
             </h2>
             <p className="font-body text-[16px] text-[#1a3300] mb-8">
-              Adjust your inventory scale below to estimate instant financial and labor savings with OddoStock.
+              Adjust your inventory scale below to estimate instant financial and labor savings with Carpool.
             </p>
 
             {/* Slider 1: SKU Count */}
