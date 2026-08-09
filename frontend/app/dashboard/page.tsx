@@ -1319,8 +1319,8 @@ export default function EmployeeDashboard() {
       <header className="border-b-2 border-[#173300] bg-[#FCFAF5] sticky top-0 z-40 shadow-sm" suppressHydrationWarning>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-6" suppressHydrationWarning>
           <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0">
-            <img src="/logo.svg" alt="Oddo Logo" className="h-8 w-auto" />
-            <span className="font-heading font-extrabold text-2xl text-[#173300] tracking-tight">Carpooling</span>
+            <img src="/logo.png" alt="Carpool logo" className="h-8 w-auto" />
+            <span className="font-heading font-extrabold text-2xl text-[#173300] tracking-tight">Carpool</span>
           </Link>
 
           <nav className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-none font-heading font-bold text-xs sm:text-sm p-1">

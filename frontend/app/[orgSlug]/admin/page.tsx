@@ -170,7 +170,7 @@ export default function OrgAdminDashboard({
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo.svg" alt="Oddo Logo" className="h-8 w-auto" />
+              <img src="/logo.png" alt="Carpool logo" className="h-8 w-auto" />
             </Link>
             <span className="h-5 w-px bg-[#B6B6B6]" />
             <div className="flex items-center gap-2">
