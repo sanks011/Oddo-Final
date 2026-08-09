@@ -205,6 +205,9 @@ export default function EmployeeDashboard() {
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [walletTxPage, setWalletTxPage] = useState(1);
   const [placesPage, setPlacesPage] = useState(1);
+  const [vehiclesPage, setVehiclesPage] = useState(1);
+  const [activeTripsPage, setActiveTripsPage] = useState(1);
+  const [bargainsPage, setBargainsPage] = useState(1);
 
   /* Search Loading */
   const [searchLoading, setSearchLoading] = useState(false);
@@ -1990,7 +1993,7 @@ export default function EmployeeDashboard() {
             {activePassengerBargains.length > 0 && (
               <div className="flex flex-col gap-4 max-w-4xl w-full mx-auto mb-6">
                 <h3 className="font-heading text-xl font-extrabold text-[#173300]">Active Fare Bargains</h3>
-                {activePassengerBargains.map((b, bIdx) => (
+                {activePassengerBargains.slice((bargainsPage - 1) * 5, bargainsPage * 5).map((b, bIdx) => (
                   <div key={`pass-bargain-${b.rideId}-${bIdx}`} className="bg-[#FFEB5B]/30 border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                       <div className="flex items-center gap-2">
@@ -2065,7 +2068,7 @@ export default function EmployeeDashboard() {
             )}
 
             <div className="flex flex-col gap-6 max-w-4xl w-full mx-auto">
-              {trips.map((trip, tripIdx) => (
+              {trips.slice((activeTripsPage - 1) * 5, activeTripsPage * 5).map((trip, tripIdx) => (
                 <div key={`trip-${trip.id}-${tripIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 md:p-8 shadow-[8px_8px_0px_#173300] flex flex-col gap-5">
                   {/* Trip Header */}
                   <div className="flex justify-between items-start pb-4 border-b-2 border-dashed border-[#B6B6B6]">
@@ -2310,6 +2313,11 @@ export default function EmployeeDashboard() {
                   )}
                 </div>
               ))}
+              <PaginationBar
+                currentPage={activeTripsPage}
+                totalPages={Math.ceil(trips.length / 5)}
+                onPageChange={setActiveTripsPage}
+              />
             </div>
           </div>
         )}
@@ -2331,41 +2339,48 @@ export default function EmployeeDashboard() {
                 <button onClick={() => setIsAddVehOpen(true)} className="mt-6 px-6 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">Register Now</button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {vehicles.map((v, vIdx) => (
-                  <div key={`veh-${v.id}-${vIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col justify-between gap-4">
-                    <div>
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">{v.fuelType}</span>
-                        <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${
-                          v.status === "Verified"
-                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                            : v.status === "Rejected"
-                            ? "bg-red-100 text-red-800 border-red-300"
-                            : "bg-amber-100 text-amber-800 border-amber-300"
-                        }`}>
-                          ● {v.status === "Verified" ? "VERIFIED" : v.status === "Rejected" ? "REJECTED" : "PENDING REVIEW"}
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {vehicles.slice((vehiclesPage - 1) * 6, vehiclesPage * 6).map((v, vIdx) => (
+                    <div key={`veh-${v.id}-${vIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col justify-between gap-4">
+                      <div>
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">{v.fuelType}</span>
+                          <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${
+                            v.status === "Verified"
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              : v.status === "Rejected"
+                              ? "bg-red-100 text-red-800 border-red-300"
+                              : "bg-amber-100 text-amber-800 border-amber-300"
+                          }`}>
+                            ● {v.status === "Verified" ? "VERIFIED" : v.status === "Rejected" ? "REJECTED" : "PENDING REVIEW"}
+                          </span>
+                        </div>
+                        <h3 className="font-heading text-2xl font-extrabold text-[#173300] mt-2">{v.model}</h3>
+                        <div className="text-xs font-mono font-bold text-[#173300]/80 mt-0.5">Plate: {v.plateNumber}</div>
+                      </div>
+
+                      {(v as any).rejectionReason && (
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs font-mono text-red-800">
+                          <strong className="block text-[10px] uppercase text-red-600">Rejection Reason:</strong>
+                          {(v as any).rejectionReason}
+                        </div>
+                      )}
+
+                      <div className="bg-[#173300]/[0.04] border border-dashed border-[#B6B6B6] rounded-xl p-3 font-mono text-xs flex justify-between items-center">
+                        <span>Capacity: {v.capacity} Seats</span>
+                        <span className="text-[#173300]/60 text-[10px]">
+                          {v.status === "Verified" ? "Ready for Carpooling" : "Driving License Under Review"}
                         </span>
                       </div>
-                      <h3 className="font-heading text-2xl font-extrabold text-[#173300] mt-2">{v.model}</h3>
-                      <div className="text-xs font-mono font-bold text-[#173300]/80 mt-0.5">Plate: {v.plateNumber}</div>
                     </div>
-
-                    {(v as any).rejectionReason && (
-                      <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs font-mono text-red-800">
-                        <strong className="block text-[10px] uppercase text-red-600">Rejection Reason:</strong>
-                        {(v as any).rejectionReason}
-                      </div>
-                    )}
-
-                    <div className="bg-[#173300]/[0.04] border border-dashed border-[#B6B6B6] rounded-xl p-3 font-mono text-xs flex justify-between items-center">
-                      <span>Capacity: {v.capacity} Seats</span>
-                      <span className="text-[#173300]/60 text-[10px]">
-                        {v.status === "Verified" ? "Ready for Carpooling" : "Driving License Under Review"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <PaginationBar
+                  currentPage={vehiclesPage}
+                  totalPages={Math.ceil(vehicles.length / 6)}
+                  onPageChange={setVehiclesPage}
+                />
               </div>
             )}
           </div>

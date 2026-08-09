@@ -229,10 +229,16 @@ async function main() {
   for (let i = 0; i < 500; i++) {
     const pickup = KOLKATA_LOCATIONS[i % KOLKATA_LOCATIONS.length];
     const dest = KOLKATA_LOCATIONS[(i + 5) % KOLKATA_LOCATIONS.length];
-    const driver = allUsers[i % allUsers.length];
-    const vehicle = allVehicles[i % allVehicles.length];
+    // Ensure john.doe, admin@acme, superadmin and all Kolkata users are assigned as drivers
+    let driver = allUsers[i % allUsers.length];
+    if (i < 30) driver = allUsers[2]; // John Doe as driver for first 30 rides
+    else if (i < 60) driver = allUsers[1]; // Org Admin as driver
+    else if (i < 90) driver = allUsers[0]; // Super Admin as driver
 
-    const departureAt = new Date(now + ((i % 10) - 2) * 24 * 60 * 60 * 1000 + (i * 15 * 60 * 1000));
+    const vehicle = allVehicles.find(v => v.ownerId === driver.id) || allVehicles[i % allVehicles.length];
+
+    const departureAt = new Date(now - ((i % 15) + 1) * 24 * 60 * 60 * 1000 - (i * 15 * 60 * 1000));
+    const isCompleted = i % 2 === 0;
 
     ridesData.push({
       id: `ride-kolkata-${i}`,
@@ -245,7 +251,7 @@ async function main() {
       departureAt,
       availableSeats: (i % 3) + 1,
       farePerSeat: (60 + (i % 15) * 10).toFixed(2),
-      status: i % 5 === 0 ? 'COMPLETED' : 'SCHEDULED',
+      status: isCompleted ? 'COMPLETED' : 'SCHEDULED',
       routeDistanceKm: 8.5 + (i % 20),
       routeDurationMinutes: 20 + (i % 30),
       isRecurring: i % 4 === 0,
@@ -260,7 +266,7 @@ async function main() {
     skipDuplicates: true,
   });
 
-  const allRides = await prisma.ride.findMany({ select: { id: true, driverId: true, farePerSeat: true } });
+  const allRides = await prisma.ride.findMany({ select: { id: true, driverId: true, farePerSeat: true, status: true } });
   console.log(`✅ Seeded ${allRides.length} Rides.`);
 
   // 7. SEED 500 JOIN REQUESTS
@@ -268,13 +274,17 @@ async function main() {
   const joinRequestsData = [];
   for (let i = 0; i < 500; i++) {
     const ride = allRides[i % allRides.length];
-    const passenger = allUsers[(i + 1) % allUsers.length];
+    // Ensure john.doe, admin@acme, and others are passengers
+    let passenger = allUsers[(i + 1) % allUsers.length];
+    if (i >= 90 && i < 120) passenger = allUsers[2]; // John Doe as passenger
+    else if (i >= 120 && i < 150) passenger = allUsers[1]; // Org Admin as passenger
+
     joinRequestsData.push({
       id: `req-kolkata-${i}`,
       initiatedBy: i % 2 === 0 ? 'PASSENGER' : 'DRIVER',
       agreedFare: ride.farePerSeat,
       seatsRequested: 1,
-      status: i % 2 === 0 ? 'ACCEPTED' : 'PENDING',
+      status: ride.status === 'COMPLETED' ? 'ACCEPTED' : (i % 2 === 0 ? 'ACCEPTED' : 'PENDING'),
       rideId: ride.id,
       passengerId: passenger.id,
     });
@@ -285,7 +295,7 @@ async function main() {
     skipDuplicates: true,
   });
 
-  const allJoinRequests = await prisma.joinRequest.findMany({ select: { id: true, rideId: true, passengerId: true, agreedFare: true } });
+  const allJoinRequests = await prisma.joinRequest.findMany({ select: { id: true, rideId: true, passengerId: true, agreedFare: true, status: true } });
   console.log(`✅ Seeded ${allJoinRequests.length} Join Requests.`);
 
   // 8. SEED 500 NEGOTIATIONS
@@ -337,8 +347,7 @@ async function main() {
   const bookingsData = [];
   for (let i = 0; i < 500; i++) {
     const req = allJoinRequests[i];
-    const ride = allRides[i % allRides.length];
-    const passenger = allUsers[(i + 3) % allUsers.length];
+    const ride = allRides.find(r => r.id === req.rideId) || allRides[i % allRides.length];
 
     bookingsData.push({
       id: `booking-kolkata-${i}`,
@@ -346,7 +355,7 @@ async function main() {
       totalFare: req.agreedFare,
       requestId: req.id,
       rideId: ride.id,
-      passengerId: passenger.id,
+      passengerId: req.passengerId,
     });
   }
 
@@ -355,7 +364,7 @@ async function main() {
     skipDuplicates: true,
   });
 
-  const allBookings = await prisma.booking.findMany({ select: { id: true, requestId: true, rideId: true } });
+  const allBookings = await prisma.booking.findMany({ select: { id: true, requestId: true, rideId: true, passengerId: true } });
   console.log(`✅ Seeded ${allBookings.length} Bookings.`);
 
   // 11. SEED 500 TRIPS
@@ -363,11 +372,13 @@ async function main() {
   const tripsData = [];
   for (let i = 0; i < 500; i++) {
     const ride = allRides[i];
+    const isCompleted = ride.status === 'COMPLETED' || i % 2 === 0;
+
     tripsData.push({
       id: `trip-kolkata-${i}`,
-      status: i % 4 === 0 ? 'COMPLETED' : i % 4 === 1 ? 'IN_PROGRESS' : 'SCHEDULED',
-      startedAt: new Date(now - (i * 3600000)),
-      completedAt: i % 4 === 0 ? new Date(now - (i * 3600000) + 1800000) : null,
+      status: isCompleted ? 'COMPLETED' : (i % 3 === 0 ? 'IN_PROGRESS' : 'SCHEDULED'),
+      startedAt: new Date(now - (i * 3600000 + 3600000)),
+      completedAt: isCompleted ? new Date(now - (i * 3600000 + 1800000)) : null,
       routeDistanceKm: ride.routeDistanceKm || 12.5,
       routeDurationMinutes: ride.routeDurationMinutes || 25,
       rideId: ride.id,
