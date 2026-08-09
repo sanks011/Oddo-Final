@@ -308,7 +308,7 @@ export default function SuperAdminPage() {
       <div className="min-h-screen bg-[#FCFAF5] flex flex-col justify-center items-center px-4 py-12">
         <div className="mb-6 flex flex-col items-center gap-2">
           <Link href="/" className="inline-block">
-            <img src="/logo.svg" alt="Oddo Logo" className="h-10 w-auto" />
+            <img src="/logo.png" alt="Carpool logo" className="h-10 w-auto" />
           </Link>
           <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#FFEB5B] bg-[#173300] px-3.5 py-1 rounded-md border-2 border-[#173300] shadow-[2px_2px_0px_#173300]">
             SUPER ADMIN GATEWAY
@@ -412,7 +412,7 @@ export default function SuperAdminPage() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo.svg" alt="Oddo Logo" className="h-8 w-auto" />
+              <img src="/logo.png" alt="Carpool logo" className="h-8 w-auto" />
             </Link>
             <span className="bg-[#173300] text-[#FFEB5B] text-xs font-mono font-bold px-2.5 py-1 rounded-md border border-[#173300]">
               SUPER ADMIN

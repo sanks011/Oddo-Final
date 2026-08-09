@@ -650,7 +650,7 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] relative overflow-hidden flex-col" suppressHydrationWarning>
         <Image
           src="/login-panel.png"
-          alt="OddoStock brand artwork"
+          alt="Carpool brand artwork"
           fill
           className="object-cover"
           priority
@@ -662,8 +662,8 @@ export default function LoginPage() {
         <div className="relative z-10 p-8" suppressHydrationWarning>
           <Link href="/" className="inline-block">
             <img
-              src="/logo.svg"
-              alt="OddoStock"
+              src="/logo.png"
+              alt="Carpool"
               className="h-10 w-auto brightness-0 invert"
             />
           </Link>
@@ -685,7 +685,7 @@ export default function LoginPage() {
         {/* Mobile logo */}
         <div className="lg:hidden mb-6 self-start" suppressHydrationWarning>
           <Link href="/">
-            <img src="/logo.svg" alt="OddoStock" className="h-9 w-auto" />
+            <img src="/logo.png" alt="Carpool" className="h-9 w-auto" />
           </Link>
         </div>
 

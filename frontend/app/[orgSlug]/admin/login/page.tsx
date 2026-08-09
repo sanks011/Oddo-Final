@@ -60,7 +60,7 @@ export default function OrgAdminLoginPage({
       {/* Top Brand Link */}
       <div className="mb-6 flex flex-col items-center gap-2">
         <Link href="/" className="inline-block">
-          <img src="/logo.svg" alt="Oddo Logo" className="h-10 w-auto" />
+          <img src="/logo.png" alt="Carpool logo" className="h-10 w-auto" />
         </Link>
         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#173300]/50 bg-[#173300]/[0.05] px-3 py-1 rounded-full border border-[#B6B6B6]">
           ORGANIZATION ADMIN PORTAL
