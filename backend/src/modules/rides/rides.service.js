@@ -491,8 +491,9 @@ class RidesService {
     }
 
     // Atomic transaction for accepting request and creating Booking & Trip
-    return await prisma.$transaction(async (tx) => {
-      const currentRide = await tx.ride.findUnique({ where: { id: rideId } });
+    return await prisma.$transaction(
+      async (tx) => {
+        const currentRide = await tx.ride.findUnique({ where: { id: rideId } });
 
       if (currentRide.availableSeats < request.seatsRequested) {
         const error = new Error('Insufficient seats available to accept this request');
@@ -600,7 +601,9 @@ class RidesService {
         },
         joinRequest: updatedRequest,
       };
-    });
+    },
+    { maxWait: 10000, timeout: 20000 }
+    );
   }
 
   // Declines a join request

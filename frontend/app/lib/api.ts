@@ -783,6 +783,8 @@ export interface NegotiationData {
   rideId: string;
   passengerId: string;
   status: "OPEN" | "ACCEPTED" | "REJECTED";
+  createdAt?: string;
+  updatedAt?: string;
   offers: Array<{
     id: string;
     offeredBy: "PASSENGER" | "DRIVER";

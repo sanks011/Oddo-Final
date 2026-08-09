@@ -8,6 +8,41 @@ import type { Socket } from "socket.io-client";
 import { useAuth } from "../context/AuthContext";
 import LocationInput from "../components/LocationInput";
 import { useToast } from "../components/Toast";
+import {
+  apiSearchRides,
+  apiStartNegotiation,
+  apiGetNegotiations,
+  apiCounterOffer,
+  apiAcceptNegotiation,
+  apiRejectNegotiation,
+  apiSubmitJoinRequest,
+  apiGetMyOfferedRides,
+  apiAcceptJoinRequest,
+  apiDeclineJoinRequest,
+  apiGetMyTrips,
+  apiGetTripHistory,
+  apiGetWallet,
+  apiListVehicles,
+  apiListSavedPlaces,
+  apiPublishRide,
+  apiUpdateTripStatus,
+  apiVerifyOtp,
+  apiGetTripOtp,
+  apiPayForTrip,
+  apiCreateVehicle,
+  apiRechargeWallet,
+  apiGetMessages,
+  apiSendMessage,
+} from "../lib/api";
+import {
+  getTrackingSocket,
+  joinTripRoom,
+  joinRideRoom,
+  emitDriverLocation,
+  getChatSocket,
+  joinChatTripRoom,
+  sendChatMessage,
+} from "../lib/socket";
 
 const RouteMap = dynamic(() => import("../components/RouteMap"), { ssr: false });
 
@@ -175,16 +210,13 @@ export default function EmployeeDashboard() {
   const refreshNegotiationData = useCallback(async (rideId: string, showToastOnSuccess = false, showLoading = false) => {
     if (showLoading) setIsRefreshingNeg(true);
     try {
-      const { apiGetNegotiations } = await import("../lib/api");
       const list = await apiGetNegotiations(rideId);
       if (Array.isArray(list) && list.length > 0) {
         const neg = list[0];
-        // Sort offers by createdAt timestamp ascending to ensure exact chronological order
         const sortedOffers = [...(neg.offers || [])].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
 
-        // Show newest offers at top of history log
         const formattedHistory = [...sortedOffers].reverse().map(o => ({
           by: o.offeredBy === "PASSENGER" ? "You" : "Driver",
           amount: Number(o.amount),
@@ -210,23 +242,27 @@ export default function EmployeeDashboard() {
           };
         });
 
-        // Also sync active passenger bargain item
+        // Sync active passenger bargain item
         setActivePassengerBargains(prev => {
           const rest = prev.filter(b => b.rideId !== rideId);
-          if (neg.status === "ACCEPTED" || neg.status === "REJECTED") {
-            return rest;
-          }
+          if (neg.status === "REJECTED") return rest;
           const existing = prev.find(b => b.rideId === rideId);
-          const updatedItem = existing ? {
-            ...existing,
+          const rideObj = availableRides.find(r => r.id === rideId);
+          const updatedItem: ActivePassengerBargain = {
+            rideId,
             negotiationId: neg.id,
-            currentOffer: latestAmt || existing.currentOffer,
+            pickupLabel: existing?.pickupLabel || rideObj?.pickupLabel || "Pickup Location",
+            destinationLabel: existing?.destinationLabel || rideObj?.destinationLabel || "Drop Location",
+            driverName: existing?.driverName || rideObj?.driverName || "Driver",
+            model: existing?.model || rideObj?.model || "Vehicle",
+            plateNumber: existing?.plateNumber || rideObj?.plateNumber || "",
+            farePerSeat: existing?.farePerSeat || rideObj?.farePerSeat || 0,
+            currentOffer: latestAmt || existing?.currentOffer || 0,
             lastOfferedBy: lastBy,
-            status: "pending" as const,
+            status: neg.status === "ACCEPTED" ? "accepted" : "pending",
             updatedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          } : null;
-
-          return updatedItem ? [...rest, updatedItem] : rest;
+          };
+          return [...rest, updatedItem];
         });
 
         if (showToastOnSuccess) {
@@ -238,33 +274,29 @@ export default function EmployeeDashboard() {
     } finally {
       if (showLoading) setIsRefreshingNeg(false);
     }
-  }, [showToast]);
+  }, [availableRides, showToast]);
 
   /* Listen for socket negotiation events while Bargain Modal is open */
   useEffect(() => {
     if (!negotiating?.rideId) return;
-    let sock: any;
     const rideId = negotiating.rideId;
-    const setup = async () => {
-      const { getTrackingSocket, joinRideRoom } = await import("../lib/socket");
-      sock = getTrackingSocket();
-      joinRideRoom(rideId);
-      const handleOffer = (data: any) => {
-        if (data.rideId === rideId) {
-          refreshNegotiationData(rideId);
-        }
-      };
-      sock.on("negotiation:offer", handleOffer);
-      sock.on("negotiation:accepted", handleOffer);
-      sock.on("negotiation:rejected", handleOffer);
-    };
-    setup();
-    return () => {
-      if (sock) {
-        sock.off("negotiation:offer");
-        sock.off("negotiation:accepted");
-        sock.off("negotiation:rejected");
+    joinRideRoom(rideId);
+    const sock = getTrackingSocket();
+
+    const handleOffer = (data: any) => {
+      if (data && (data.rideId === rideId || !data.rideId)) {
+        refreshNegotiationData(rideId);
       }
+    };
+
+    sock.on("negotiation:offer", handleOffer);
+    sock.on("negotiation:accepted", handleOffer);
+    sock.on("negotiation:rejected", handleOffer);
+
+    return () => {
+      sock.off("negotiation:offer", handleOffer);
+      sock.off("negotiation:accepted", handleOffer);
+      sock.off("negotiation:rejected", handleOffer);
     };
   }, [negotiating?.rideId, refreshNegotiationData]);
 
@@ -317,12 +349,10 @@ export default function EmployeeDashboard() {
   const loadOfferedRides = async (showLoading = false) => {
     try {
       if (showLoading) setOfferedLoading(true);
-      const { apiGetMyOfferedRides } = await import("../lib/api");
       const offers = await apiGetMyOfferedRides();
       setOfferedRides(offers);
       offers.forEach((r) => {
         try {
-          const { joinRideRoom } = require("../lib/socket");
           joinRideRoom(r.id);
         } catch {}
       });
@@ -336,7 +366,6 @@ export default function EmployeeDashboard() {
     const load = async () => {
       try {
         setTripsLoading(true);
-        const { apiListVehicles, apiGetMyTrips, apiGetWallet, apiListSavedPlaces, apiGetTripHistory } = await import("../lib/api");
         const [vehData, tripData, walletData, places, histData] = await Promise.allSettled([
           apiListVehicles(),
           apiGetMyTrips(),
@@ -418,7 +447,6 @@ export default function EmployeeDashboard() {
   /* ── Helper to refresh active trips & history silently ── */
   const refreshTrips = async () => {
     try {
-      const { apiGetMyTrips, apiGetTripHistory } = await import("../lib/api");
       const [tripData, histData] = await Promise.allSettled([
         apiGetMyTrips(),
         apiGetTripHistory(1, 30),
@@ -434,47 +462,39 @@ export default function EmployeeDashboard() {
 
   /* ── Global real-time socket listeners for instant silent updates ── */
   useEffect(() => {
-    let sock: any;
-    const setupGlobalSocket = async () => {
-      const { getTrackingSocket } = await import("../lib/socket");
-      sock = getTrackingSocket();
+    const sock = getTrackingSocket();
 
-      const handleGlobalSync = () => {
-        refreshTrips();
-        loadOfferedRides(false);
-      };
-
-      sock.on("ride:created", handleGlobalSync);
-      sock.on("join_request:created", handleGlobalSync);
-      sock.on("ride:accepted", handleGlobalSync);
-      sock.on("join_request:declined", handleGlobalSync);
-      sock.on("negotiation:offer", handleGlobalSync);
-      sock.on("negotiation:accepted", handleGlobalSync);
-      sock.on("negotiation:rejected", handleGlobalSync);
-      sock.on("trip:updated", handleGlobalSync);
-      sock.on("trip:status", handleGlobalSync);
-      sock.on("trip:pickup_verified", handleGlobalSync);
-      sock.on("ride:started", handleGlobalSync);
-      sock.on("payment:updated", handleGlobalSync);
+    const handleGlobalSync = () => {
+      refreshTrips();
+      loadOfferedRides(false);
     };
 
-    setupGlobalSocket();
+    sock.on("ride:created", handleGlobalSync);
+    sock.on("join_request:created", handleGlobalSync);
+    sock.on("ride:accepted", handleGlobalSync);
+    sock.on("join_request:declined", handleGlobalSync);
+    sock.on("negotiation:offer", handleGlobalSync);
+    sock.on("negotiation:accepted", handleGlobalSync);
+    sock.on("negotiation:rejected", handleGlobalSync);
+    sock.on("trip:updated", handleGlobalSync);
+    sock.on("trip:status", handleGlobalSync);
+    sock.on("trip:pickup_verified", handleGlobalSync);
+    sock.on("ride:started", handleGlobalSync);
+    sock.on("payment:updated", handleGlobalSync);
 
     return () => {
-      if (sock) {
-        sock.off("ride:created");
-        sock.off("join_request:created");
-        sock.off("ride:accepted");
-        sock.off("join_request:declined");
-        sock.off("negotiation:offer");
-        sock.off("negotiation:accepted");
-        sock.off("negotiation:rejected");
-        sock.off("trip:updated");
-        sock.off("trip:status");
-        sock.off("trip:pickup_verified");
-        sock.off("ride:started");
-        sock.off("payment:updated");
-      }
+      sock.off("ride:created", handleGlobalSync);
+      sock.off("join_request:created", handleGlobalSync);
+      sock.off("ride:accepted", handleGlobalSync);
+      sock.off("join_request:declined", handleGlobalSync);
+      sock.off("negotiation:offer", handleGlobalSync);
+      sock.off("negotiation:accepted", handleGlobalSync);
+      sock.off("negotiation:rejected", handleGlobalSync);
+      sock.off("trip:updated", handleGlobalSync);
+      sock.off("trip:status", handleGlobalSync);
+      sock.off("trip:pickup_verified", handleGlobalSync);
+      sock.off("ride:started", handleGlobalSync);
+      sock.off("payment:updated", handleGlobalSync);
     };
   }, []);
 
@@ -488,49 +508,41 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     if (!activeTripIdsKey) return;
     const tripIds = activeTripIdsKey.split(",");
-    import("../lib/socket").then(({ joinTripRoom }) => {
-      tripIds.forEach((id) => {
-        if (id) joinTripRoom(id);
-      });
+    tripIds.forEach((id) => {
+      if (id) joinTripRoom(id);
     });
   }, [activeTripIdsKey]);
 
   /* ── Live tracking via Socket.IO ── */
   useEffect(() => {
     if (!trackingTripId) return;
-    const setupSocket = async () => {
-      const { getTrackingSocket, joinTripRoom } = await import("../lib/socket");
-      const sock = getTrackingSocket();
-      socketRef.current = sock;
-      joinTripRoom(trackingTripId);
-      sock.on("location:update", (data: { tripId: string; lat: number; lng: number; etaMinutes?: number }) => {
-        if (data.tripId === trackingTripId) {
-          setDriverLocation({ lat: data.lat, lng: data.lng });
-          if (data.etaMinutes != null) setEtaMinutes(data.etaMinutes);
-        }
-      });
-      sock.on("otp:generated", (data: { tripId: string; otp: string }) => {
-        if (data.tripId === trackingTripId) setOtpDisplay(data.otp);
-      });
-      sock.on("ride:started", (data: { tripId: string }) => {
-        if (data.tripId === trackingTripId) {
-          setTrips(prev => prev.map(t => t.id === data.tripId ? { ...t, status: "IN_PROGRESS" } : t));
-        }
-      });
-      sock.on("negotiation:offer", () => {
-        loadOfferedRides(false);
-      });
-      sock.on("negotiation:accepted", () => {
-        loadOfferedRides(false);
-      });
-    };
-    setupSocket();
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.off("location:update");
-        socketRef.current.off("otp:generated");
-        socketRef.current.off("ride:started");
+    const sock = getTrackingSocket();
+    socketRef.current = sock;
+    joinTripRoom(trackingTripId);
+
+    const handleLocUpdate = (data: { tripId: string; lat: number; lng: number; etaMinutes?: number }) => {
+      if (data.tripId === trackingTripId) {
+        setDriverLocation({ lat: data.lat, lng: data.lng });
+        if (data.etaMinutes != null) setEtaMinutes(data.etaMinutes);
       }
+    };
+    const handleOtpGen = (data: { tripId: string; otp: string }) => {
+      if (data.tripId === trackingTripId) setOtpDisplay(data.otp);
+    };
+    const handleRideStart = (data: { tripId: string }) => {
+      if (data.tripId === trackingTripId) {
+        setTrips(prev => prev.map(t => t.id === data.tripId ? { ...t, status: "IN_PROGRESS" } : t));
+      }
+    };
+
+    sock.on("location:update", handleLocUpdate);
+    sock.on("otp:generated", handleOtpGen);
+    sock.on("ride:started", handleRideStart);
+
+    return () => {
+      sock.off("location:update", handleLocUpdate);
+      sock.off("otp:generated", handleOtpGen);
+      sock.off("ride:started", handleRideStart);
     };
   }, [trackingTripId]);
 
@@ -538,10 +550,9 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     const driverTrip = trips.find(t => t.role === "DRIVER" && t.status === "IN_PROGRESS");
     if (!driverTrip || !driverTrip.id) return;
-    const sendLoc = async () => {
+    const sendLoc = () => {
       if (!navigator.geolocation) return;
-      navigator.geolocation.getCurrentPosition(async pos => {
-        const { emitDriverLocation } = await import("../lib/socket");
+      navigator.geolocation.getCurrentPosition(pos => {
         emitDriverLocation(driverTrip.id, pos.coords.latitude, pos.coords.longitude);
       });
     };
@@ -565,7 +576,6 @@ export default function EmployeeDashboard() {
     setSearchError("");
     try {
       const [pickupGeo, destGeo] = await Promise.all([geocodeAddress(startLoc), geocodeAddress(destLoc)]);
-      const { apiSearchRides } = await import("../lib/api");
       const payload: any = {
         pickupLabel: startLoc, pickupLat: pickupGeo.lat, pickupLng: pickupGeo.lng,
         destinationLabel: destLoc, destinationLat: destGeo.lat, destinationLng: destGeo.lng,
@@ -593,7 +603,7 @@ export default function EmployeeDashboard() {
       });
 
       if (filtered.length > 0) {
-        setAvailableRides(filtered.map((r: any) => ({
+        const mappedRides = filtered.map((r: any) => ({
           id: r.id,
           driverName: r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : "Driver",
           driverRating: r.driver?.rating || 4.5,
@@ -608,7 +618,39 @@ export default function EmployeeDashboard() {
           distanceKm: r.routeDistanceKm || 0,
           durationMins: r.routeDurationMinutes || 0,
           isScheduled: r.isRecurring || false,
-        })));
+        }));
+        setAvailableRides(mappedRides);
+
+        // Check for active negotiations on these rides
+        for (const r of mappedRides) {
+          try {
+            const list = await apiGetNegotiations(r.id);
+            if (Array.isArray(list) && list.length > 0) {
+              const neg = list[0];
+              const sortedOffers = [...(neg.offers || [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+              const lastOffer = sortedOffers[sortedOffers.length - 1];
+              if (neg.status === "OPEN" || neg.status === "ACCEPTED") {
+                setActivePassengerBargains(prev => {
+                  const rest = prev.filter(b => b.rideId !== r.id);
+                  return [...rest, {
+                    rideId: r.id,
+                    negotiationId: neg.id,
+                    pickupLabel: r.pickupLabel,
+                    destinationLabel: r.destinationLabel,
+                    driverName: r.driverName,
+                    model: r.model,
+                    plateNumber: r.plateNumber,
+                    farePerSeat: r.farePerSeat,
+                    currentOffer: lastOffer ? Number(lastOffer.amount) : r.farePerSeat,
+                    lastOfferedBy: lastOffer ? lastOffer.offeredBy : null,
+                    status: neg.status === "ACCEPTED" ? "accepted" : "pending",
+                    updatedAt: new Date(neg.updatedAt || neg.createdAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  }];
+                });
+              }
+            }
+          } catch {}
+        }
       } else {
         setAvailableRides([]);
         setSearchError("No matching rides found on this exact route. Pickup and destination must both be within 1 km.");
@@ -642,8 +684,6 @@ export default function EmployeeDashboard() {
     const actionKey = `send-offer:${negotiating.rideId}`;
     startAction(actionKey);
     try {
-      const { apiStartNegotiation, apiCounterOffer } = await import("../lib/api");
-      const { emitNegotiationOffer, joinRideRoom } = await import("../lib/socket");
       joinRideRoom(negotiating.rideId);
 
       let neg: any;
@@ -654,7 +694,6 @@ export default function EmployeeDashboard() {
           neg = await apiStartNegotiation(negotiating.rideId, bargainAmount);
         } catch (err: any) {
           if (err?.message?.includes("already exists") || err?.message?.includes("active negotiation")) {
-            const { apiGetNegotiations } = await import("../lib/api");
             const list = await apiGetNegotiations(negotiating.rideId);
             if (Array.isArray(list) && list.length > 0) {
               const openNeg = list.find((n: any) => n.status === "OPEN") || list[0];
@@ -670,7 +709,6 @@ export default function EmployeeDashboard() {
         neg = await apiCounterOffer(negotiating.rideId, activeNegId, bargainAmount);
       }
 
-      emitNegotiationOffer(negotiating.rideId, neg.id, bargainAmount, "PASSENGER");
       setNegotiating(prev => prev ? {
         ...prev, negotiationId: neg.id,
         currentOffer: bargainAmount, lastOfferedBy: "PASSENGER",
@@ -678,11 +716,11 @@ export default function EmployeeDashboard() {
         history: [{ by: "You", amount: bargainAmount, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }, ...prev.history],
       } : null);
 
-      // Track bargain in Passenger's My Trips list
+      // Track bargain in Passenger's Active Bargains list
       const rideObj = availableRides.find(r => r.id === negotiating.rideId);
       setActivePassengerBargains(prev => {
         const idx = prev.findIndex(b => b.rideId === negotiating.rideId);
-        const item = {
+        const item: ActivePassengerBargain = {
           rideId: negotiating.rideId,
           negotiationId: neg.id,
           pickupLabel: rideObj?.pickupLabel || "Pickup Location",
@@ -715,28 +753,22 @@ export default function EmployeeDashboard() {
 
   const handleAcceptNegotiation = async () => {
     if (!negotiating?.negotiationId) return;
-    if (negotiating.lastOfferedBy === "PASSENGER") {
-      showToast("Cannot accept your own offer. Please wait for driver response.", "warning");
-      return;
-    }
     const actionKey = `accept-neg:${negotiating.negotiationId}`;
     startAction(actionKey);
     try {
-      const { apiAcceptNegotiation, apiSubmitJoinRequest, apiGetMyTrips } = await import("../lib/api");
-      const { emitNegotiationAccept } = await import("../lib/socket");
-
       const acceptedFare = negotiating.currentOffer;
       const rideId = negotiating.rideId;
       const negId = negotiating.negotiationId;
 
       setActivePassengerBargains(prev => prev.filter(b => b.rideId !== rideId));
       setNegotiating(null);
-      setActiveMainTab("my-trips");
 
-      await apiAcceptNegotiation(rideId, negId);
-      emitNegotiationAccept(rideId, negId, acceptedFare);
+      if (negotiating.status !== "accepted") {
+        await apiAcceptNegotiation(rideId, negId);
+      }
       await apiSubmitJoinRequest(rideId, { agreedFare: acceptedFare, seatsRequested: selectedSeats });
 
+      setActiveMainTab("my-trips");
       showToast(`Negotiation accepted at ₹${acceptedFare}! Join request sent. 🎉`, "success");
 
       apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
@@ -757,10 +789,7 @@ export default function EmployeeDashboard() {
     const actionKey = `driver-counter-neg:${negId}`;
     startAction(actionKey);
     try {
-      const { apiCounterOffer } = await import("../lib/api");
-      const { emitNegotiationOffer } = await import("../lib/socket");
       await apiCounterOffer(rideId, negId, amount);
-      emitNegotiationOffer(rideId, negId, amount, "DRIVER");
       showToast(`Counter offer of ₹${amount} sent to passenger!`, "success");
       loadOfferedRides();
     } catch (err: any) {
@@ -774,10 +803,7 @@ export default function EmployeeDashboard() {
     const actionKey = `driver-accept-neg:${negId}`;
     startAction(actionKey);
     try {
-      const { apiAcceptNegotiation } = await import("../lib/api");
-      const { emitNegotiationAccept } = await import("../lib/socket");
       await apiAcceptNegotiation(rideId, negId);
-      emitNegotiationAccept(rideId, negId, agreedFare);
       showToast(`Accepted passenger's offer of ₹${agreedFare}!`, "success");
       loadOfferedRides();
     } catch (err: any) {
@@ -791,7 +817,6 @@ export default function EmployeeDashboard() {
     const actionKey = `driver-reject-neg:${negId}`;
     startAction(actionKey);
     try {
-      const { apiRejectNegotiation } = await import("../lib/api");
       await apiRejectNegotiation(rideId, negId);
       showToast("Negotiation declined", "info");
       loadOfferedRides();
@@ -806,7 +831,6 @@ export default function EmployeeDashboard() {
     const actionKey = `accept-join:${requestId}`;
     startAction(actionKey);
     try {
-      const { apiAcceptJoinRequest, apiGetMyTrips } = await import("../lib/api");
       await apiAcceptJoinRequest(rideId, requestId);
       showToast("Join request accepted! Trip created. 🎉", "success");
       loadOfferedRides();
@@ -820,7 +844,6 @@ export default function EmployeeDashboard() {
 
   const handleDeclineDriverJoinRequest = async (rideId: string, requestId: string) => {
     try {
-      const { apiDeclineJoinRequest } = await import("../lib/api");
       await apiDeclineJoinRequest(rideId, requestId);
       showToast("Join request declined", "info");
       loadOfferedRides();
@@ -834,7 +857,6 @@ export default function EmployeeDashboard() {
     const actionKey = `book:${ride.id}`;
     startAction(actionKey);
     try {
-      const { apiSubmitJoinRequest, apiGetMyTrips } = await import("../lib/api");
       await apiSubmitJoinRequest(ride.id, { agreedFare: ride.farePerSeat, seatsRequested: selectedSeats });
       setActiveMainTab("my-trips");
       showToast("Booking request sent! 🚗", "success");
@@ -862,7 +884,6 @@ export default function EmployeeDashboard() {
     setOfferLoading(true);
     try {
       const [pickupGeo, destGeo] = await Promise.all([geocodeAddress(offerStartLoc), geocodeAddress(offerDestLoc)]);
-      const { apiPublishRide, apiGetMyTrips } = await import("../lib/api");
       await apiPublishRide({
         vehicleId: offerVehId,
         pickupLabel: offerStartLoc, pickupLat: pickupGeo.lat, pickupLng: pickupGeo.lng,
@@ -891,7 +912,6 @@ export default function EmployeeDashboard() {
     setOtpLoading(true);
     setOtpError("");
     try {
-      const { apiUpdateTripStatus } = await import("../lib/api");
       const res = await apiUpdateTripStatus(trip.id, "IN_PROGRESS");
       if (res.otp) setOtpDisplay(res.otp);
       setActiveOtpTrip(trip);
@@ -916,7 +936,6 @@ export default function EmployeeDashboard() {
     setTrips(prev => prev.map(t => t.id === trip.id ? { ...t, status: "IN_PROGRESS" as const } : t));
 
     try {
-      const { apiVerifyOtp, apiGetMyTrips } = await import("../lib/api");
       await apiVerifyOtp(trip.id, otpToUse);
       setOtpInput("");
       setActiveOtpTrip(null);
@@ -924,7 +943,6 @@ export default function EmployeeDashboard() {
       showToast("OTP verified! Ride in progress. 🚗", "success");
       apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
     } catch (err: any) {
-      const { apiGetMyTrips } = await import("../lib/api");
       apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
       setOtpError(err?.message || "Invalid OTP");
     } finally {
@@ -949,14 +967,12 @@ export default function EmployeeDashboard() {
     setTrips(prev => prev.map(t => t.id === trip.id ? { ...t, status: "IN_PROGRESS" as const } : t));
 
     try {
-      const { apiVerifyOtp, apiGetMyTrips } = await import("../lib/api");
       await apiVerifyOtp(trip.id, otpVal, passengerId);
       setDriverOtpInputs(prev => ({ ...prev, [inputKey]: "" }));
       setTrackingTripId(trip.id);
       showToast("OTP verified! Ride has started! 🚗", "success");
       apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
     } catch (err: any) {
-      const { apiGetMyTrips } = await import("../lib/api");
       apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
       showToast(err?.message || "Invalid OTP", "error");
     } finally {
@@ -974,13 +990,11 @@ export default function EmployeeDashboard() {
     setTrips(prev => prev.map(t => t.id === trip.id ? { ...t, status: "COMPLETED" as const } : t));
 
     try {
-      const { apiUpdateTripStatus, apiGetMyTrips } = await import("../lib/api");
       await apiUpdateTripStatus(trip.id, "COMPLETED");
       setTrackingTripId(null);
       showToast("Ride completed! Fare collection panel is active below. 🏁", "success");
       apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
     } catch (err: any) {
-      const { apiGetMyTrips } = await import("../lib/api");
       apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
       showToast(err?.message || "Could not end ride", "error");
     } finally {
@@ -991,7 +1005,6 @@ export default function EmployeeDashboard() {
   /* ── Driver: Mark Passenger Payment as Paid via Cash or Online ── */
   const handleMarkPassengerPaid = async (trip: Trip, passengerId: string | undefined, method: "CASH" | "ONLINE" | "UPI") => {
     try {
-      const { apiPayForTrip, apiGetMyTrips } = await import("../lib/api");
       const methodKey = method === "ONLINE" ? "UPI" : method;
       await apiPayForTrip(trip.id, methodKey);
       showToast(`Marked passenger payment as ${method === "CASH" ? "Paid via Cash 💵" : "Paid Online 💳"}!`, "success");
@@ -1008,14 +1021,11 @@ export default function EmployeeDashboard() {
     setPayLoading(true);
     try {
       if (payMethod === "CASH") {
-        // Cash — just mark completed
-        const { apiUpdateTripStatus } = await import("../lib/api");
         await apiUpdateTripStatus(paymentTrip.id, "COMPLETED").catch(() => {});
         setTrips(prev => prev.map(t => t.id === paymentTrip!.id ? { ...t, status: "COMPLETED" } : t));
         setPaymentTrip(null);
         showToast("Payment recorded via Cash!", "success");
       } else {
-        const { apiPayForTrip } = await import("../lib/api");
         const res = await apiPayForTrip(paymentTrip.id, payMethod);
         if (res.trip) setTrips(prev => prev.map(t => t.id === paymentTrip!.id ? { ...t, status: res.trip.status } : t));
         if (payMethod === "WALLET") setWalletBalance(prev => prev - paymentTrip!.fareAmount);
@@ -1036,7 +1046,6 @@ export default function EmployeeDashboard() {
     }
     setVehLoading(true);
     try {
-      const { apiCreateVehicle } = await import("../lib/api");
       const formData = new FormData();
       formData.append("model", newModel);
       formData.append("registrationNumber", newPlate);
@@ -1076,7 +1085,6 @@ export default function EmployeeDashboard() {
   const handleOpenChat = async (trip: Trip) => {
     setChatOpenTrip(trip);
     try {
-      const { apiGetMessages } = await import("../lib/api");
       const msgs = await apiGetMessages(trip.id);
       const list = Array.isArray(msgs) ? msgs : (msgs as any)?.messages || [];
       setChatMessages(list.map((m: any) => {
@@ -1100,45 +1108,38 @@ export default function EmployeeDashboard() {
   /* ── Real-time Socket Listener for active chat ── */
   useEffect(() => {
     if (!chatOpenTrip) return;
-    let chatSock: any = null;
+    const chatSock = getChatSocket();
+    joinChatTripRoom(chatOpenTrip.id);
 
-    const setupChatSocket = async () => {
-      const { getChatSocket, joinChatTripRoom } = await import("../lib/socket");
-      chatSock = getChatSocket();
-      joinChatTripRoom(chatOpenTrip.id);
+    const handleNewMsg = (msg: any) => {
+      if (msg && (msg.tripId === chatOpenTrip.id || !msg.tripId)) {
+        const isMe = msg.senderId === user?.id || msg.sender?.id === user?.id;
+        const senderLabel = isMe
+          ? `${user ? `${user.firstName} ${user.lastName}` : "You"} (You)`
+          : `${msg.sender?.firstName || "User"} ${msg.sender?.lastName || ""}`.trim();
 
-      chatSock.on("message:new", (msg: any) => {
-        if (msg && (msg.tripId === chatOpenTrip.id || !msg.tripId)) {
-          const isMe = msg.senderId === user?.id || msg.sender?.id === user?.id;
-          const senderLabel = isMe
-            ? `${user ? `${user.firstName} ${user.lastName}` : "You"} (You)`
-            : `${msg.sender?.firstName || "User"} ${msg.sender?.lastName || ""}`.trim();
+        const formatted = {
+          id: msg.id,
+          senderId: msg.senderId || msg.sender?.id,
+          sender: senderLabel,
+          text: msg.content,
+          time: msg.createdAt
+            ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
 
-          const formatted = {
-            id: msg.id,
-            senderId: msg.senderId || msg.sender?.id,
-            sender: senderLabel,
-            text: msg.content,
-            time: msg.createdAt
-              ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-              : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          };
-
-          setChatMessages(prev => {
-            const exists = prev.some(m => (m.id && msg.id && m.id === msg.id) || (m.text === msg.content && m.senderId === (msg.senderId || msg.sender?.id)));
-            if (exists) return prev;
-            return [...prev, formatted];
-          });
-        }
-      });
+        setChatMessages(prev => {
+          const exists = prev.some(m => (m.id && msg.id && m.id === msg.id) || (m.text === msg.content && m.senderId === (msg.senderId || msg.sender?.id)));
+          if (exists) return prev;
+          return [...prev, formatted];
+        });
+      }
     };
 
-    setupChatSocket();
+    chatSock.on("message:new", handleNewMsg);
 
     return () => {
-      if (chatSock) {
-        chatSock.off("message:new");
-      }
+      chatSock.off("message:new", handleNewMsg);
     };
   }, [chatOpenTrip, user]);
 
@@ -1159,12 +1160,10 @@ export default function EmployeeDashboard() {
     setChatMessages(prev => [...prev, optMsg]);
 
     try {
-      const { sendChatMessage } = await import("../lib/socket");
       sendChatMessage(chatOpenTrip.id, text);
     } catch {}
 
     try {
-      const { apiSendMessage } = await import("../lib/api");
       const res = await apiSendMessage(chatOpenTrip.id, text);
       if (res && res.id) {
         setChatMessages(prev => prev.map(m => m.id === optMsg.id ? {
@@ -1800,42 +1799,70 @@ export default function EmployeeDashboard() {
                   <div key={b.rideId} className="bg-[#FFEB5B]/30 border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#173300] text-[#FFEB5B]">
-                          Bargain Active
+                        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                          b.status === "accepted" ? "bg-emerald-800 text-white" : "bg-[#173300] text-[#FFEB5B]"
+                        }`}>
+                          {b.status === "accepted" ? "Offer Accepted! 🎉" : "Bargain Active"}
                         </span>
                         <span className="text-xs font-mono font-bold text-[#173300]/70">Driver: {b.driverName}</span>
                       </div>
                       <h4 className="font-heading text-lg font-extrabold text-[#173300] mt-1">{b.pickupLabel} to {b.destinationLabel}</h4>
                       <div className="text-xs font-mono text-[#173300]/80 mt-0.5">
-                        Listed Fare: ₹{b.farePerSeat} · Latest Offer: <strong className="text-[#173300]">₹{b.currentOffer}</strong> ({b.lastOfferedBy === "DRIVER" ? "Driver Countered!" : "You Offered"})
+                        Listed Fare: ₹{b.farePerSeat} · Agreed / Offer: <strong className="text-[#173300]">₹{b.currentOffer}</strong> ({
+                          b.status === "accepted"
+                            ? "Fare Accepted!"
+                            : b.lastOfferedBy === "DRIVER"
+                            ? "Driver Countered!"
+                            : "You Offered"
+                        })
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => {
-                          const rideObj = availableRides.find(r => r.id === b.rideId) || {
-                            id: b.rideId,
-                            driverName: b.driverName,
-                            driverRating: 4.5,
-                            driverPhone: "",
-                            model: b.model,
-                            plateNumber: b.plateNumber,
-                            pickupLabel: b.pickupLabel,
-                            destinationLabel: b.destinationLabel,
-                            departureTime: "Today",
-                            availableSeats: 1,
-                            farePerSeat: b.farePerSeat,
-                            distanceKm: 0,
-                            durationMins: 0,
-                            isScheduled: false,
-                          };
-                          handleOpenBargain(rideObj);
-                          refreshNegotiationData(b.rideId);
-                        }}
-                        className="px-4 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300] hover:bg-[#173300]/90 transition-all"
-                      >
-                        View / Continue Bargain 💬
-                      </button>
+                      {b.status === "accepted" ? (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await apiSubmitJoinRequest(b.rideId, { agreedFare: b.currentOffer, seatsRequested: selectedSeats });
+                              setActivePassengerBargains(prev => prev.filter(item => item.rideId !== b.rideId));
+                              setActiveMainTab("my-trips");
+                              showToast(`Join request submitted at ₹${b.currentOffer}! 🎉`, "success");
+                              const fresh = await apiGetMyTrips();
+                              setTrips(fresh.map(mapTrip));
+                            } catch (err: any) {
+                              showToast(err?.message || "Failed to submit join request", "error");
+                            }
+                          }}
+                          className="px-4 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300] hover:bg-[#173300]/90 transition-all"
+                        >
+                          Submit Join Request at ₹{b.currentOffer} 🎉
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            const rideObj = availableRides.find(r => r.id === b.rideId) || {
+                              id: b.rideId,
+                              driverName: b.driverName,
+                              driverRating: 4.5,
+                              driverPhone: "",
+                              model: b.model,
+                              plateNumber: b.plateNumber,
+                              pickupLabel: b.pickupLabel,
+                              destinationLabel: b.destinationLabel,
+                              departureTime: "Today",
+                              availableSeats: 1,
+                              farePerSeat: b.farePerSeat,
+                              distanceKm: 0,
+                              durationMins: 0,
+                              isScheduled: false,
+                            };
+                            handleOpenBargain(rideObj);
+                            refreshNegotiationData(b.rideId);
+                          }}
+                          className="px-4 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300] hover:bg-[#173300]/90 transition-all"
+                        >
+                          View / Continue Bargain 💬
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -2261,61 +2288,67 @@ export default function EmployeeDashboard() {
               <button onClick={() => setNegotiating(null)} className="w-8 h-8 rounded-full border border-[#173300] font-bold text-xs hover:bg-[#FFEB5B]">✕</button>
             </div>
 
-            {negotiating.lastOfferedBy === "DRIVER" && (
+            {negotiating.status === "accepted" ? (
+              <div className="bg-emerald-100 border-2 border-emerald-600 p-3 rounded-2xl text-center font-heading font-extrabold text-xs text-emerald-900 shadow-[3px_3px_0px_#173300]">
+                🎉 Driver accepted your offer of ₹{negotiating.currentOffer}! Submit your join request below to book your seat.
+              </div>
+            ) : negotiating.lastOfferedBy === "DRIVER" ? (
               <div className="bg-[#FFEB5B] border-2 border-[#173300] p-3 rounded-2xl text-center font-heading font-extrabold text-xs text-[#173300] shadow-[3px_3px_0px_#173300] animate-pulse">
                 Driver Countered: ₹{negotiating.currentOffer}! Accept below or adjust your counter offer.
               </div>
-            )}
+            ) : null}
 
             <div className="bg-[#173300]/[0.04] rounded-2xl p-4 text-center">
               <div className="text-xs font-mono text-[#173300]/60 mb-1">Listed Fare</div>
               <div className="text-2xl font-extrabold font-heading text-[#173300] line-through opacity-50">₹{negotiating.listedFare}</div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#173300]/70">
-                {negotiating.lastOfferedBy === "DRIVER" ? "Driver Counter Price / Adjust" : "Your Offer"}
-              </label>
-              <div className="flex items-center justify-between gap-2 bg-[#173300]/[0.02] p-3 rounded-2xl border-2 border-dashed border-[#B6B6B6]">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setBargainAmount(Math.max(10, bargainAmount - 10))}
-                    className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
-                  >
-                    -₹10
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBargainAmount(Math.max(10, bargainAmount - 5))}
-                    className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
-                  >
-                    -₹5
-                  </button>
-                </div>
+            {negotiating.status !== "accepted" && (
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-mono font-bold uppercase tracking-wider text-[#173300]/70">
+                  {negotiating.lastOfferedBy === "DRIVER" ? "Driver Counter Price / Adjust" : "Your Offer"}
+                </label>
+                <div className="flex items-center justify-between gap-2 bg-[#173300]/[0.02] p-3 rounded-2xl border-2 border-dashed border-[#B6B6B6]">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setBargainAmount(Math.max(10, bargainAmount - 10))}
+                      className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
+                    >
+                      -₹10
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBargainAmount(Math.max(10, bargainAmount - 5))}
+                      className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
+                    >
+                      -₹5
+                    </button>
+                  </div>
 
-                <div className="font-heading text-3xl font-extrabold text-[#173300] px-2 text-center min-w-[80px]">
-                  ₹{bargainAmount}
-                </div>
+                  <div className="font-heading text-3xl font-extrabold text-[#173300] px-2 text-center min-w-[80px]">
+                    ₹{bargainAmount}
+                  </div>
 
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setBargainAmount(bargainAmount + 5)}
-                    className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
-                  >
-                    +₹5
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBargainAmount(bargainAmount + 10)}
-                    className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
-                  >
-                    +₹10
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setBargainAmount(bargainAmount + 5)}
+                      className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
+                    >
+                      +₹5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBargainAmount(bargainAmount + 10)}
+                      className="px-3 py-2 text-xs font-mono font-bold whitespace-nowrap rounded-xl border-2 border-[#173300] shadow-[2px_2px_0px_#173300] bg-[#FCFAF5] hover:bg-[#FFEB5B] transition-all"
+                    >
+                      +₹10
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {negotiating.history.length > 0 && (
               <div className="bg-[#173300]/[0.04] rounded-xl p-3 max-h-32 overflow-y-auto space-y-1">
@@ -2332,6 +2365,24 @@ export default function EmployeeDashboard() {
               {(() => {
                 const isSending = !!actionLoading[`send-offer:${negotiating.rideId}`];
                 const isAccepting = !!actionLoading[`accept-neg:${negotiating.negotiationId}`];
+                if (negotiating.status === "accepted") {
+                  return (
+                    <button
+                      onClick={handleAcceptNegotiation}
+                      disabled={isAccepting}
+                      className="flex-1 py-3 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {isAccepting ? (
+                        <>
+                          <span className="inline-block w-4 h-4 border-2 border-[#FFEB5B] border-t-transparent rounded-full animate-spin" />
+                          <span>Submitting Request…</span>
+                        </>
+                      ) : (
+                        `Submit Join Request at ₹${negotiating.currentOffer} 🎉`
+                      )}
+                    </button>
+                  );
+                }
                 return (
                   <>
                     <button
