@@ -1313,6 +1313,27 @@ export default function EmployeeDashboard() {
     setHasMounted(true);
   }, []);
 
+  if (!hasMounted) {
+    return (
+      <div className="min-h-screen bg-[#FCFAF5] text-[#173300] flex flex-col font-sans">
+        <header className="border-b-2 border-[#173300] bg-[#FCFAF5] sticky top-0 z-40 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-6">
+            <div className="flex items-center gap-2.5">
+              <img src="/logo.svg" alt="Oddo Logo" className="h-8 w-auto" />
+              <span className="font-heading font-extrabold text-2xl text-[#173300] tracking-tight">Carpooling</span>
+            </div>
+            <div className="h-8 w-32 bg-[#173300]/10 rounded-xl animate-pulse" />
+          </div>
+        </header>
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
+          <div className="text-center font-heading font-extrabold text-lg text-[#173300] animate-pulse">
+            Loading Dashboard…
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FCFAF5] text-[#173300] flex flex-col font-sans" suppressHydrationWarning>
       {/* ── Header ── */}
