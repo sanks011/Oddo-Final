@@ -105,6 +105,17 @@ interface NegotiationState {
   history: Array<{ by: string; amount: number; time: string }>;
 }
 
+/* ─── deterministic OTP helper ─────────────────────── */
+function computePassengerOtp(tripId?: string, passengerId?: string): string {
+  if (!tripId || !passengerId) return "1234";
+  let hash = 0;
+  const str = `${tripId}:${passengerId}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) & 0xffffff;
+  }
+  return String(1000 + (Math.abs(hash) % 9000));
+}
+
 /* ─── geocode helper ───────────────────────────────── */
 async function geocodeAddress(addr: string): Promise<{ lat: number; lng: number }> {
   try {
@@ -417,15 +428,25 @@ export default function EmployeeDashboard() {
   function mapTrip(t: any): Trip {
     const isPaid = t.myPaymentStatus === "PAID" || (t.passengers && t.passengers.some((p: any) => p.paymentStatus === "PAID"));
     const payMethod = t.myPaymentMethod || t.passengers?.[0]?.paymentMethod || "";
+    const isDriverRole = t.callerRole === "DRIVER" || (user && (user.id === t.driver?.id || user.id === t.driverId));
+    const computedRole: "DRIVER" | "PASSENGER" = isDriverRole ? "DRIVER" : "PASSENGER";
+    const passengerOtp = t.otp || computePassengerOtp(t.id, user?.id);
+
+    const rawPassengers = t.passengers || [];
+    const formattedPassengersList = rawPassengers.map((p: any) => ({
+      ...p,
+      otp: p.otp || computePassengerOtp(t.id, p.id),
+    }));
+
     return {
       id: t.id,
       rideId: t.rideId,
-      role: (t.callerRole || "PASSENGER") as "PASSENGER" | "DRIVER",
+      role: computedRole,
       driverName: t.driver ? `${t.driver.firstName} ${t.driver.lastName}` : "Driver",
       driverPhone: t.driver?.phone || "",
-      driverId: t.driver?.id,
-      passengers: (t.passengers || []).map((p: any) => `${p.firstName} ${p.lastName}`),
-      passengersList: t.passengers || [],
+      driverId: t.driver?.id || t.driverId,
+      passengers: formattedPassengersList.map((p: any) => `${p.firstName} ${p.lastName}`),
+      passengersList: formattedPassengersList,
       vehicleModel: t.ride?.vehicle?.model || "Vehicle",
       plateNumber: t.ride?.vehicle?.registrationNumber || "",
       pickupLabel: t.ride?.pickupLabel || "",
@@ -435,13 +456,13 @@ export default function EmployeeDashboard() {
       destinationLat: t.ride?.destinationLat,
       destinationLng: t.ride?.destinationLng,
       departureTime: t.ride?.departureAt ? new Date(t.ride.departureAt).toLocaleString() : "",
-      seatsBooked: t.passengers?.[0]?.seatsBooked || 1,
-      fareAmount: t.fareAmount || t.passengers?.[0]?.fareAmount || 0,
+      seatsBooked: formattedPassengersList[0]?.seatsBooked || 1,
+      fareAmount: t.fareAmount || formattedPassengersList[0]?.fareAmount || 0,
       status: t.status,
       distanceKm: t.ride?.routeDistanceKm || 0,
       durationMins: t.ride?.routeDurationMinutes || 0,
       routeGeometry: t.ride?.routeGeometry,
-      otp: t.otp || "",
+      otp: passengerOtp,
       myPaymentStatus: isPaid ? "PAID" : (t.myPaymentStatus || "PENDING"),
       myPaymentMethod: payMethod,
     };
@@ -467,7 +488,15 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     const sock = getTrackingSocket();
 
-    const handleGlobalSync = () => {
+    const handleGlobalSync = (data?: any) => {
+      if (data?.trip) {
+        const mapped = mapTrip(data.trip);
+        setTrips(prev => {
+          const exists = prev.some(t => t.id === mapped.id);
+          if (exists) return prev.map(t => t.id === mapped.id ? mapped : t);
+          return [mapped, ...prev];
+        });
+      }
       refreshTrips();
       loadOfferedRides(false);
     };
@@ -766,13 +795,20 @@ export default function EmployeeDashboard() {
       setActivePassengerBargains(prev => prev.filter(b => b.rideId !== rideId));
       setNegotiating(null);
 
-      await apiAcceptNegotiation(rideId, negId);
+      const res = await apiAcceptNegotiation(rideId, negId);
+      if (res?.trip) {
+        const mapped = mapTrip(res.trip);
+        setTrips(prev => {
+          const exists = prev.some(t => t.id === mapped.id);
+          if (exists) return prev.map(t => t.id === mapped.id ? mapped : t);
+          return [mapped, ...prev];
+        });
+      }
 
       setActiveMainTab("my-trips");
       showToast(`Negotiation accepted at ₹${acceptedFare}! Trip confirmed. 🎉`, "success");
 
-      const fresh = await apiGetMyTrips().catch(() => []);
-      setTrips(fresh.map(mapTrip));
+      refreshTrips();
     } catch (err: any) {
       showToast(err?.message || "Failed to accept negotiation", "error");
       refreshNegotiationData(negotiating.rideId);
@@ -804,11 +840,18 @@ export default function EmployeeDashboard() {
     const actionKey = `driver-accept-neg:${negId}`;
     startAction(actionKey);
     try {
-      await apiAcceptNegotiation(rideId, negId);
+      const res = await apiAcceptNegotiation(rideId, negId);
+      if (res?.trip) {
+        const mapped = mapTrip(res.trip);
+        setTrips(prev => {
+          const exists = prev.some(t => t.id === mapped.id);
+          if (exists) return prev.map(t => t.id === mapped.id ? mapped : t);
+          return [mapped, ...prev];
+        });
+      }
       showToast(`Accepted passenger's offer of ₹${agreedFare}! Trip confirmed. 🎉`, "success");
       loadOfferedRides();
-      const fresh = await apiGetMyTrips().catch(() => []);
-      setTrips(fresh.map(mapTrip));
+      refreshTrips();
     } catch (err: any) {
       showToast(err?.message || "Could not accept negotiation", "error");
     } finally {
@@ -834,10 +877,18 @@ export default function EmployeeDashboard() {
     const actionKey = `accept-join:${requestId}`;
     startAction(actionKey);
     try {
-      await apiAcceptJoinRequest(rideId, requestId);
+      const res = await apiAcceptJoinRequest(rideId, requestId);
+      if (res?.trip) {
+        const mapped = mapTrip(res.trip);
+        setTrips(prev => {
+          const exists = prev.some(t => t.id === mapped.id);
+          if (exists) return prev.map(t => t.id === mapped.id ? mapped : t);
+          return [mapped, ...prev];
+        });
+      }
       showToast("Join request accepted! Trip created. 🎉", "success");
       loadOfferedRides();
-      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
+      refreshTrips();
     } catch (err: any) {
       showToast(err?.message || "Could not accept join request", "error");
     } finally {

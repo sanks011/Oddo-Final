@@ -586,9 +586,10 @@ export async function apiGetJoinRequests(rideId: string) {
 }
 
 export async function apiAcceptJoinRequest(rideId: string, requestId: string) {
-  return fetchApi(`/rides/${rideId}/join-requests/${requestId}/accept`, {
-    method: "PATCH",
-  });
+  return fetchApi<{ message: string; booking?: any; trip?: TripData; joinRequest?: any }>(
+    `/rides/${rideId}/join-requests/${requestId}/accept`,
+    { method: "PATCH" }
+  );
 }
 
 export async function apiDeclineJoinRequest(rideId: string, requestId: string) {
@@ -889,10 +890,15 @@ export async function apiAcceptNegotiation(
   rideId: string,
   negotiationId: string
 ) {
-  return fetchApi<{ message: string; negotiation: NegotiationData }>(
-    `/rides/${rideId}/negotiations/${negotiationId}/accept`,
-    { method: "PATCH" }
-  );
+  return fetchApi<{
+    message: string;
+    agreedFare?: number;
+    negotiation: NegotiationData;
+    trip?: TripData;
+    booking?: any;
+  }>(`/rides/${rideId}/negotiations/${negotiationId}/accept`, {
+    method: "PATCH",
+  });
 }
 
 export async function apiRejectNegotiation(
