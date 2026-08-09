@@ -1442,8 +1442,8 @@ export default function EmployeeDashboard() {
                       </div>
                     )}
 
-                    {!searchLoading && availableRides.map(ride => (
-                      <div key={ride.id} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col gap-4">
+                    {!searchLoading && availableRides.map((ride, rideIdx) => (
+                      <div key={`avail-ride-${ride.id}-${rideIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col gap-4">
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-4">
                             <div className="w-14 h-14 rounded-2xl bg-[#FFEB5B] border-2 border-[#173300] flex items-center justify-center font-heading font-extrabold text-xl shadow-[3px_3px_0px_#173300]">
@@ -1643,12 +1643,12 @@ export default function EmployeeDashboard() {
                 </div>
 
                 <div className="space-y-6">
-                  {offeredRides.map((ride) => {
+                  {offeredRides.map((ride, rideIdx) => {
                     const activeNegs = ride.negotiations || [];
                     const pendingReqs = ride.joinRequests || [];
                     return (
                       <div
-                        key={ride.id}
+                        key={`offer-ride-${ride.id}-${rideIdx}`}
                         className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col gap-4"
                       >
                         {/* Ride Header */}
@@ -1685,7 +1685,7 @@ export default function EmployeeDashboard() {
                             </div>
 
                             <div className="space-y-3">
-                              {activeNegs.map((neg: any) => {
+                              {activeNegs.map((neg: any, negIdx: number) => {
                                 const passName = neg.passenger
                                   ? `${neg.passenger.firstName} ${neg.passenger.lastName}`
                                   : "Passenger";
@@ -1694,7 +1694,7 @@ export default function EmployeeDashboard() {
 
                                 return (
                                   <div
-                                    key={neg.id}
+                                    key={`neg-${neg.id}-${negIdx}`}
                                     className="bg-[#FCFAF5] border border-[#173300] rounded-xl p-3.5 flex flex-col gap-3"
                                   >
                                     <div className="flex justify-between items-center font-mono text-xs">
@@ -1787,13 +1787,13 @@ export default function EmployeeDashboard() {
                             </h4>
 
                             <div className="space-y-2">
-                              {pendingReqs.map((req: any) => {
+                              {pendingReqs.map((req: any, reqIdx: number) => {
                                 const passName = req.passenger
                                   ? `${req.passenger.firstName} ${req.passenger.lastName}`
                                   : "Passenger";
                                 return (
                                   <div
-                                    key={req.id}
+                                    key={`req-${req.id}-${reqIdx}`}
                                     className="bg-white border border-blue-200 rounded-xl p-3 flex justify-between items-center font-mono text-xs"
                                   >
                                     <div>
@@ -1854,8 +1854,8 @@ export default function EmployeeDashboard() {
             {activePassengerBargains.length > 0 && (
               <div className="flex flex-col gap-4 max-w-4xl w-full mx-auto mb-6">
                 <h3 className="font-heading text-xl font-extrabold text-[#173300]">Active Fare Bargains</h3>
-                {activePassengerBargains.map(b => (
-                  <div key={b.rideId} className="bg-[#FFEB5B]/30 border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                {activePassengerBargains.map((b, bIdx) => (
+                  <div key={`pass-bargain-${b.rideId}-${bIdx}`} className="bg-[#FFEB5B]/30 border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${
@@ -1929,8 +1929,8 @@ export default function EmployeeDashboard() {
             )}
 
             <div className="flex flex-col gap-6 max-w-4xl w-full mx-auto">
-              {trips.map(trip => (
-                <div key={trip.id} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 md:p-8 shadow-[8px_8px_0px_#173300] flex flex-col gap-5">
+              {trips.map((trip, tripIdx) => (
+                <div key={`trip-${trip.id}-${tripIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 md:p-8 shadow-[8px_8px_0px_#173300] flex flex-col gap-5">
                   {/* Trip Header */}
                   <div className="flex justify-between items-start pb-4 border-b-2 border-dashed border-[#B6B6B6]">
                     <div className="flex items-center gap-4">
@@ -2014,7 +2014,7 @@ export default function EmployeeDashboard() {
                           const actionKey = `otp:${trip.id}:${p.id || ""}`;
                           const isVerifying = !!actionLoading[actionKey];
                           return (
-                            <div key={p.id || idx} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[2px_2px_0px_#173300]">
+                            <div key={`otp-pass-${trip.id}-${p.id || 'p'}-${idx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[2px_2px_0px_#173300]">
                               <div>
                                 <div className="font-heading font-extrabold text-base text-[#173300]">
                                   {p.firstName} {p.lastName}
@@ -2091,7 +2091,7 @@ export default function EmployeeDashboard() {
                       </div>
                       <div className="space-y-3">
                         {(trip.passengersList && trip.passengersList.length > 0 ? trip.passengersList : [{ id: "", firstName: "Passenger", lastName: "", phone: "", seatsBooked: trip.seatsBooked, fareAmount: trip.fareAmount, paymentStatus: "PENDING" }]).map((p: any, idx: number) => (
-                          <div key={p.id || idx} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[2px_2px_0px_#173300]">
+                          <div key={`settle-pass-${trip.id}-${p.id || 'p'}-${idx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[2px_2px_0px_#173300]">
                             <div>
                               <div className="font-heading font-extrabold text-base text-[#173300]">
                                 {p.firstName} {p.lastName}
@@ -2196,8 +2196,8 @@ export default function EmployeeDashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {vehicles.map(v => (
-                  <div key={v.id} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col justify-between gap-4">
+                {vehicles.map((v, vIdx) => (
+                  <div key={`veh-${v.id}-${vIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col justify-between gap-4">
                     <div>
                       <div className="flex justify-between items-start">
                         <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">{v.fuelType}</span>
@@ -2247,8 +2247,8 @@ export default function EmployeeDashboard() {
               </div>
             ) : (
               <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] space-y-4">
-                {rideHistory.map(h => (
-                  <div key={h.id} className="bg-[#173300]/[0.03] border-2 border-dashed border-[#B6B6B6] rounded-2xl p-4 flex justify-between items-center">
+                {rideHistory.map((h, hIdx) => (
+                  <div key={`hist-${h.id}-${hIdx}`} className="bg-[#173300]/[0.03] border-2 border-dashed border-[#B6B6B6] rounded-2xl p-4 flex justify-between items-center">
                     <div>
                       <div className="text-[10px] font-mono text-[#173300]/50">{h.departureTime}</div>
                       <h4 className="font-heading text-lg font-extrabold text-[#173300]">{h.pickupLabel} to {h.destinationLabel}</h4>
@@ -2284,8 +2284,8 @@ export default function EmployeeDashboard() {
               <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300]">
                 <h3 className="font-heading font-extrabold text-lg text-[#173300] mb-4">Recent Transactions</h3>
                 <div className="space-y-3">
-                  {walletTransactions.slice(0, 10).map(tx => (
-                    <div key={tx.id} className="flex justify-between items-center py-2 border-b border-dashed border-[#B6B6B6] last:border-0">
+                  {walletTransactions.slice(0, 10).map((tx, txIdx) => (
+                    <div key={`w-tx-${tx.id}-${txIdx}`} className="flex justify-between items-center py-2 border-b border-dashed border-[#B6B6B6] last:border-0">
                       <div>
                         <div className="font-semibold text-sm text-[#173300]">{tx.description}</div>
                         <div className="text-xs text-[#173300]/60">{new Date(tx.createdAt).toLocaleDateString()}</div>
@@ -2315,8 +2315,8 @@ export default function EmployeeDashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {savedPlaces.map(sp => (
-                  <div key={sp.id} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-5 shadow-[5px_5px_0px_#173300]">
+                {savedPlaces.map((sp, spIdx) => (
+                  <div key={`sp-${sp.id}-${spIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-5 shadow-[5px_5px_0px_#173300]">
                     <h3 className="font-heading text-lg font-extrabold text-[#173300]">{sp.label}</h3>
                     <p className="text-xs font-mono text-[#173300]/70 mt-1">{sp.address}</p>
                   </div>
@@ -2537,7 +2537,7 @@ export default function EmployeeDashboard() {
             <div className="h-64 overflow-y-auto space-y-3 bg-[#173300]/[0.03] border border-dashed border-[#B6B6B6] rounded-2xl p-4">
               {chatMessages.length === 0 && <p className="text-xs text-center text-[#173300]/40 font-mono mt-8">No messages yet. Say hi!</p>}
               {chatMessages.map((msg, idx) => (
-                <div key={idx} className="bg-[#FCFAF5] border border-[#173300] rounded-xl p-3 text-xs font-mono">
+                <div key={`chat-msg-${msg.id || idx}-${idx}`} className="bg-[#FCFAF5] border border-[#173300] rounded-xl p-3 text-xs font-mono">
                   <div className="flex justify-between text-[10px] font-bold text-[#173300]/50 mb-1"><span>{msg.sender}</span><span>{msg.time}</span></div>
                   <p className="text-[#173300] font-semibold">{msg.text}</p>
                 </div>
