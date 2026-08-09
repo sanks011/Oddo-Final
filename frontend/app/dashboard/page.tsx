@@ -613,7 +613,11 @@ export default function EmployeeDashboard() {
   };
 
   /* ── NEGOTIATION handlers ── */
-  const handleOpenBargain = (ride: AvailableRide) => {
+  const handleOpenBargain = async (ride: AvailableRide) => {
+    if (new Date(ride.departureTime).getTime() <= Date.now()) {
+      showToast("Cannot start negotiation. Ride departure time has already passed.", "warning");
+      return;
+    }
     setNegotiating({
       rideId: ride.id, negotiationId: null,
       currentOffer: ride.farePerSeat - 10,
@@ -622,22 +626,51 @@ export default function EmployeeDashboard() {
       history: [],
     });
     setBargainAmount(ride.farePerSeat - 10);
-    refreshNegotiationData(ride.id);
+    await refreshNegotiationData(ride.id);
   };
 
   const handleSendOffer = async () => {
     if (!negotiating) return;
     try {
-      const { apiStartNegotiation, apiCounterOffer } = await import("../lib/api");
+      const { apiStartNegotiation, apiCounterOffer, apiGetNegotiations } = await import("../lib/api");
       const { emitNegotiationOffer, joinRideRoom } = await import("../lib/socket");
       joinRideRoom(negotiating.rideId);
 
       let neg: any;
-      if (!negotiating.negotiationId) {
-        neg = await apiStartNegotiation(negotiating.rideId, bargainAmount);
-      } else {
-        neg = await apiCounterOffer(negotiating.rideId, negotiating.negotiationId, bargainAmount);
+      let activeNegId = negotiating.negotiationId;
+
+      if (!activeNegId) {
+        try {
+          const list = await apiGetNegotiations(negotiating.rideId);
+          if (Array.isArray(list) && list.length > 0) {
+            const openNeg = list.find((n: any) => n.status === "OPEN") || list[0];
+            if (openNeg && openNeg.status === "OPEN") {
+              activeNegId = openNeg.id;
+            }
+          }
+        } catch {}
       }
+
+      if (!activeNegId) {
+        try {
+          neg = await apiStartNegotiation(negotiating.rideId, bargainAmount);
+        } catch (err: any) {
+          if (err?.message?.includes("already exists") || err?.message?.includes("active negotiation")) {
+            const list = await apiGetNegotiations(negotiating.rideId);
+            if (Array.isArray(list) && list.length > 0) {
+              const openNeg = list.find((n: any) => n.status === "OPEN") || list[0];
+              neg = await apiCounterOffer(negotiating.rideId, openNeg.id, bargainAmount);
+            } else {
+              throw err;
+            }
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        neg = await apiCounterOffer(negotiating.rideId, activeNegId, bargainAmount);
+      }
+
       emitNegotiationOffer(negotiating.rideId, neg.id, bargainAmount, "PASSENGER");
       setNegotiating(prev => prev ? {
         ...prev, negotiationId: neg.id,
@@ -675,12 +708,16 @@ export default function EmployeeDashboard() {
       showToast("Offer sent to driver!", "success");
     } catch (err: any) {
       showToast(err?.message || "Could not send offer", "error");
-      setSearchError(err?.message || "Could not send offer");
+      refreshNegotiationData(negotiating.rideId);
     }
   };
 
   const handleAcceptNegotiation = async () => {
     if (!negotiating?.negotiationId) return;
+    if (negotiating.lastOfferedBy === "PASSENGER") {
+      showToast("Cannot accept your own offer. Please wait for driver response.", "warning");
+      return;
+    }
     try {
       const { apiAcceptNegotiation, apiSubmitJoinRequest } = await import("../lib/api");
       const { emitNegotiationAccept } = await import("../lib/socket");
@@ -696,7 +733,7 @@ export default function EmployeeDashboard() {
       setTrips(fresh.map(mapTrip));
     } catch (err: any) {
       showToast(err?.message || "Failed to accept negotiation", "error");
-      setSearchError(err?.message || "Failed to accept negotiation");
+      refreshNegotiationData(negotiating.rideId);
     }
   };
 
@@ -1323,14 +1360,35 @@ export default function EmployeeDashboard() {
                           </div>
                         </div>
 
-                        <div className="flex gap-3 pt-1">
-                          <button onClick={() => handleBookNow(ride)} className="flex-1 py-2.5 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                            Book Now ₹{ride.farePerSeat}
-                          </button>
-                          <button onClick={() => handleOpenBargain(ride)} className="flex-1 py-2.5 rounded-xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                            Bargain
-                          </button>
-                        </div>
+                        {(() => {
+                          const isExpired = new Date(ride.departureTime).getTime() <= Date.now();
+                          return (
+                            <div className="flex gap-3 pt-1">
+                              <button
+                                onClick={() => handleBookNow(ride)}
+                                disabled={isExpired}
+                                className={`flex-1 py-2.5 rounded-xl font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] transition-all ${
+                                  isExpired
+                                    ? "bg-gray-200 text-gray-500 border-gray-400 cursor-not-allowed shadow-none"
+                                    : "bg-[#173300] text-[#FFEB5B] hover:translate-x-[1px] hover:translate-y-[1px]"
+                                }`}
+                              >
+                                {isExpired ? "Departure Passed" : `Book Now ₹${ride.farePerSeat}`}
+                              </button>
+                              <button
+                                onClick={() => handleOpenBargain(ride)}
+                                disabled={isExpired}
+                                className={`flex-1 py-2.5 rounded-xl font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] transition-all ${
+                                  isExpired
+                                    ? "bg-gray-200 text-gray-500 border-gray-400 cursor-not-allowed shadow-none"
+                                    : "bg-[#FFEB5B] text-[#173300] hover:translate-x-[1px] hover:translate-y-[1px]"
+                                }`}
+                              >
+                                Bargain
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
@@ -2150,15 +2208,31 @@ export default function EmployeeDashboard() {
             )}
 
             <div className="flex gap-3">
-              <button onClick={handleSendOffer} className="flex-1 py-3 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">
-                Send Offer ₹{bargainAmount}
+              <button
+                onClick={handleSendOffer}
+                disabled={negotiating.lastOfferedBy === "PASSENGER"}
+                className={`flex-1 py-3 rounded-xl font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] transition-all ${
+                  negotiating.lastOfferedBy === "PASSENGER"
+                    ? "bg-gray-200 text-gray-500 border-gray-400 cursor-not-allowed shadow-none"
+                    : "bg-[#173300] text-[#FFEB5B] hover:translate-x-[1px] hover:translate-y-[1px]"
+                }`}
+              >
+                {negotiating.lastOfferedBy === "PASSENGER" ? "Offer Sent (Waiting)" : `Send Offer ₹${bargainAmount}`}
               </button>
-              {negotiating.negotiationId && (
-                <button onClick={handleAcceptNegotiation} className="flex-1 py-3 rounded-xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300]">
+              {negotiating.negotiationId && negotiating.lastOfferedBy === "DRIVER" && (
+                <button
+                  onClick={handleAcceptNegotiation}
+                  className="flex-1 py-3 rounded-xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                >
                   Accept & Book at ₹{negotiating.currentOffer}
                 </button>
               )}
             </div>
+            {negotiating.lastOfferedBy === "PASSENGER" && (
+              <p className="text-center font-mono text-xs text-[#173300]/70 italic mt-1">
+                Waiting for driver response to your offer of ₹{negotiating.currentOffer}...
+              </p>
+            )}
           </div>
         </div>
       )}
