@@ -699,11 +699,34 @@ export async function apiPayForTrip(
 ) {
   return fetchApi<{
     message: string;
-    payment: { id: string; amount: number; status: string; method: string };
-    trip: { id: string; status: string };
+    paymentId?: string;
+    razorpayOrderId?: string;
+    amount?: number;
+    keyId?: string;
+    payment?: { id: string; amount: number; status: string; method: string };
+    trip?: { id: string; status: string };
   }>(`/payments/trips/${tripId}/pay`, {
     method: "POST",
     body: JSON.stringify({ method }),
+  });
+}
+
+export async function apiVerifyTripPayment(
+  tripId: string,
+  payload: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    amount?: number;
+  }
+) {
+  return fetchApi<{
+    message: string;
+    payment: { id: string; amount: number; status: string; method: string };
+    trip: { id: string; status: string };
+  }>(`/payments/trips/${tripId}/verify`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

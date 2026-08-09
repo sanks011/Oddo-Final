@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import AgentationWrapper from "./components/AgentationWrapper";
 import { AuthProvider } from "./context/AuthContext";
@@ -24,6 +25,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap"
           rel="stylesheet"
         />
+        <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       </head>
       <body
         className="min-h-full flex flex-col bg-[#fcfaf5] text-[#1a3300] font-sans selection:bg-[#ffe95c] selection:text-[#1a3300]"

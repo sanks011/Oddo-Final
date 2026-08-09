@@ -29,11 +29,14 @@ import {
   apiVerifyOtp,
   apiGetTripOtp,
   apiPayForTrip,
+  apiVerifyTripPayment,
   apiCreateVehicle,
   apiRechargeWallet,
+  apiVerifyRecharge,
   apiGetMessages,
   apiSendMessage,
 } from "../lib/api";
+import { openRazorpayCheckout } from "../lib/razorpay";
 import {
   getTrackingSocket,
   joinTripRoom,
@@ -1022,15 +1025,71 @@ export default function EmployeeDashboard() {
     try {
       if (payMethod === "CASH") {
         await apiUpdateTripStatus(paymentTrip.id, "COMPLETED").catch(() => {});
-        setTrips(prev => prev.map(t => t.id === paymentTrip!.id ? { ...t, status: "COMPLETED" } : t));
+        setTrips(prev => prev.map(t => t.id === paymentTrip!.id ? { ...t, status: "COMPLETED", myPaymentStatus: "PAID" } : t));
         setPaymentTrip(null);
-        showToast("Payment recorded via Cash!", "success");
+        showToast("Payment recorded via Cash! 💵", "success");
+      } else if (payMethod === "WALLET") {
+        const res = await apiPayForTrip(paymentTrip.id, "WALLET");
+        if (res.trip) setTrips(prev => prev.map(t => t.id === paymentTrip!.id ? { ...t, status: res.trip!.status, myPaymentStatus: "PAID" } : t));
+        setWalletBalance(prev => prev - paymentTrip!.fareAmount);
+        setPaymentTrip(null);
+        showToast("Payment successful via Wallet! 💳", "success");
       } else {
-        const res = await apiPayForTrip(paymentTrip.id, payMethod);
-        if (res.trip) setTrips(prev => prev.map(t => t.id === paymentTrip!.id ? { ...t, status: res.trip.status } : t));
-        if (payMethod === "WALLET") setWalletBalance(prev => prev - paymentTrip!.fareAmount);
-        setPaymentTrip(null);
-        showToast(`Payment successful via ${payMethod}!`, "success");
+        // Razorpay Payment (CARD or UPI)
+        const targetTrip = paymentTrip;
+        const res = await apiPayForTrip(targetTrip.id, payMethod);
+        const orderId = res.razorpayOrderId || `order_trip_sim_${Date.now()}`;
+        const amount = res.amount || targetTrip.fareAmount;
+        const keyId = res.keyId || "rzp_test_placeholder";
+
+        const options = {
+          key: keyId,
+          amount: Math.round(amount * 100),
+          currency: "INR",
+          name: "Neko-ber Carpooling",
+          description: `Trip Payment (${targetTrip.pickupLabel} to ${targetTrip.destinationLabel})`,
+          order_id: orderId,
+          prefill: {
+            name: `${user ? `${user.firstName} ${user.lastName}` : "User"}`.trim(),
+            email: user?.email || "",
+            contact: (user as any)?.phone || "",
+            method: payMethod === "UPI" ? ("upi" as const) : ("card" as const),
+          },
+          theme: { color: "#173300" },
+          handler: async (response: any) => {
+            try {
+              const verified = await apiVerifyTripPayment(targetTrip.id, {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                amount,
+              });
+              setTrips(prev => prev.map(t => t.id === targetTrip.id ? { ...t, status: verified.trip?.status || "COMPLETED", myPaymentStatus: "PAID" } : t));
+              setPaymentTrip(null);
+              showToast(`Payment of ₹${amount} successful via Razorpay ${payMethod}! 🎉`, "success");
+            } catch (err: any) {
+              showToast(err?.message || "Razorpay payment verification failed", "error");
+            }
+          },
+        };
+
+        const handleSimulatedFallback = async () => {
+          try {
+            const verified = await apiVerifyTripPayment(targetTrip.id, {
+              razorpay_order_id: orderId,
+              razorpay_payment_id: `pay_sim_${Date.now()}`,
+              razorpay_signature: "sim_signature",
+              amount,
+            });
+            setTrips(prev => prev.map(t => t.id === targetTrip.id ? { ...t, status: verified.trip?.status || "COMPLETED", myPaymentStatus: "PAID" } : t));
+            setPaymentTrip(null);
+            showToast(`Payment of ₹${amount} verified via Razorpay ${payMethod}! 🎉`, "success");
+          } catch (err: any) {
+            showToast(err?.message || "Payment failed", "error");
+          }
+        };
+
+        await openRazorpayCheckout(options, handleSimulatedFallback);
       }
     } catch (err: any) { showToast(err?.message || "Payment failed", "error"); }
     finally { setPayLoading(false); }
@@ -2547,13 +2606,61 @@ export default function EmployeeDashboard() {
             <form onSubmit={async e => {
               e.preventDefault();
               try {
-                const { apiRechargeWallet } = await import("../lib/api");
                 const order = await apiRechargeWallet(rechargeAmt);
-                alert(`Razorpay order created: ${order.orderId}. Integrate Razorpay checkout here.`);
-              } catch { /* fallback: add locally for demo */
-                setWalletBalance(prev => prev + rechargeAmt);
+                const orderId = order.orderId;
+                const amount = order.amount;
+                const keyId = order.keyId || "rzp_test_placeholder";
+
+                const options = {
+                  key: keyId,
+                  amount: Math.round(amount * 100),
+                  currency: "INR",
+                  name: "Neko-ber Wallet",
+                  description: `Wallet Recharge ₹${amount}`,
+                  order_id: orderId,
+                  prefill: {
+                    name: `${user ? `${user.firstName} ${user.lastName}` : "User"}`.trim(),
+                    email: user?.email || "",
+                    contact: (user as any)?.phone || "",
+                  },
+                  theme: { color: "#173300" },
+                  handler: async (response: any) => {
+                    try {
+                      const verified = await apiVerifyRecharge({
+                        razorpay_order_id: response.razorpay_order_id,
+                        razorpay_payment_id: response.razorpay_payment_id,
+                        razorpay_signature: response.razorpay_signature,
+                        amount,
+                      });
+                      setWalletBalance(verified.balance);
+                      setIsRechargeOpen(false);
+                      showToast(`Wallet recharged with ₹${amount} via Razorpay! 💳`, "success");
+                    } catch (err: any) {
+                      showToast(err?.message || "Recharge verification failed", "error");
+                    }
+                  },
+                };
+
+                const handleSimulatedFallback = async () => {
+                  try {
+                    const verified = await apiVerifyRecharge({
+                      razorpay_order_id: orderId,
+                      razorpay_payment_id: `pay_sim_${Date.now()}`,
+                      razorpay_signature: "sim_signature",
+                      amount,
+                    });
+                    setWalletBalance(verified.balance);
+                    setIsRechargeOpen(false);
+                    showToast(`Wallet recharged with ₹${amount} via Razorpay! 💳`, "success");
+                  } catch (err: any) {
+                    showToast(err?.message || "Recharge failed", "error");
+                  }
+                };
+
+                await openRazorpayCheckout(options, handleSimulatedFallback);
+              } catch (err: any) {
+                showToast(err?.message || "Could not initialize recharge", "error");
               }
-              setIsRechargeOpen(false);
             }} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-mono font-bold uppercase text-[#173300]/70">Amount (₹)</label>
