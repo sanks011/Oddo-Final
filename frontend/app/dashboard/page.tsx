@@ -164,8 +164,8 @@ export default function EmployeeDashboard() {
   const [isRefreshingNeg, setIsRefreshingNeg] = useState(false);
   const [driverOtpInputs, setDriverOtpInputs] = useState<Record<string, string>>({});
 
-  const refreshNegotiationData = useCallback(async (rideId: string, showToastOnSuccess = false) => {
-    setIsRefreshingNeg(true);
+  const refreshNegotiationData = useCallback(async (rideId: string, showToastOnSuccess = false, showLoading = false) => {
+    if (showLoading) setIsRefreshingNeg(true);
     try {
       const { apiGetNegotiations } = await import("../lib/api");
       const list = await apiGetNegotiations(rideId);
@@ -175,7 +175,7 @@ export default function EmployeeDashboard() {
         const sortedOffers = [...(neg.offers || [])].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
-        
+
         // Show newest offers at top of history log
         const formattedHistory = [...sortedOffers].reverse().map(o => ({
           by: o.offeredBy === "PASSENGER" ? "You" : "Driver",
@@ -228,19 +228,9 @@ export default function EmployeeDashboard() {
     } catch {
       /* ignore */
     } finally {
-      setIsRefreshingNeg(false);
+      if (showLoading) setIsRefreshingNeg(false);
     }
   }, [showToast]);
-
-  /* Auto-poll negotiation state every 3s while Bargain Modal is open */
-  useEffect(() => {
-    if (!negotiating?.rideId) return;
-    const rideId = negotiating.rideId;
-    const interval = setInterval(() => {
-      refreshNegotiationData(rideId);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [negotiating?.rideId, refreshNegotiationData]);
 
   /* Listen for socket negotiation events while Bargain Modal is open */
   useEffect(() => {
@@ -251,22 +241,21 @@ export default function EmployeeDashboard() {
       const { getTrackingSocket, joinRideRoom } = await import("../lib/socket");
       sock = getTrackingSocket();
       joinRideRoom(rideId);
-      sock.on("negotiation:offer", (data: any) => {
+      const handleOffer = (data: any) => {
         if (data.rideId === rideId) {
           refreshNegotiationData(rideId);
         }
-      });
-      sock.on("negotiation:accepted", (data: any) => {
-        if (data.rideId === rideId) {
-          refreshNegotiationData(rideId);
-        }
-      });
+      };
+      sock.on("negotiation:offer", handleOffer);
+      sock.on("negotiation:accepted", handleOffer);
+      sock.on("negotiation:rejected", handleOffer);
     };
     setup();
     return () => {
       if (sock) {
         sock.off("negotiation:offer");
         sock.off("negotiation:accepted");
+        sock.off("negotiation:rejected");
       }
     };
   }, [negotiating?.rideId, refreshNegotiationData]);
@@ -317,9 +306,9 @@ export default function EmployeeDashboard() {
   const [offeredRides, setOfferedRides] = useState<any[]>([]);
   const [driverCounterInputs, setDriverCounterInputs] = useState<Record<string, number>>({});
 
-  const loadOfferedRides = async () => {
+  const loadOfferedRides = async (showLoading = false) => {
     try {
-      setOfferedLoading(true);
+      if (showLoading) setOfferedLoading(true);
       const { apiGetMyOfferedRides } = await import("../lib/api");
       const offers = await apiGetMyOfferedRides();
       setOfferedRides(offers);
@@ -330,7 +319,7 @@ export default function EmployeeDashboard() {
         } catch {}
       });
     } catch {} finally {
-      setOfferedLoading(false);
+      if (showLoading) setOfferedLoading(false);
     }
   };
 
@@ -376,7 +365,7 @@ export default function EmployeeDashboard() {
         if (places.status === "fulfilled" && places.value.length > 0) {
           setSavedPlaces(places.value.map(p => ({ id: p.id, label: p.label, address: p.address })));
         }
-        loadOfferedRides();
+        loadOfferedRides(true);
       } catch { /* graceful fail */ } finally {
         setTripsLoading(false);
       }
@@ -435,16 +424,16 @@ export default function EmployeeDashboard() {
     } catch {}
   };
 
-  /* ── Global real-time socket listeners & quiet fallback sync ── */
+  /* ── Global real-time socket listeners for instant silent updates ── */
   useEffect(() => {
-    let intervalId: any;
+    let sock: any;
     const setupGlobalSocket = async () => {
       const { getTrackingSocket } = await import("../lib/socket");
-      const sock = getTrackingSocket();
+      sock = getTrackingSocket();
 
       const handleGlobalSync = () => {
         refreshTrips();
-        loadOfferedRides();
+        loadOfferedRides(false);
       };
 
       sock.on("ride:created", handleGlobalSync);
@@ -459,29 +448,44 @@ export default function EmployeeDashboard() {
       sock.on("trip:pickup_verified", handleGlobalSync);
       sock.on("ride:started", handleGlobalSync);
       sock.on("payment:updated", handleGlobalSync);
-
-      // Quiet fallback background poll (every 6 seconds)
-      intervalId = setInterval(handleGlobalSync, 6000);
     };
 
     setupGlobalSocket();
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      if (sock) {
+        sock.off("ride:created");
+        sock.off("join_request:created");
+        sock.off("ride:accepted");
+        sock.off("join_request:declined");
+        sock.off("negotiation:offer");
+        sock.off("negotiation:accepted");
+        sock.off("negotiation:rejected");
+        sock.off("trip:updated");
+        sock.off("trip:status");
+        sock.off("trip:pickup_verified");
+        sock.off("ride:started");
+        sock.off("payment:updated");
+      }
     };
   }, []);
 
   /* ── Auto-join active trip socket rooms ── */
+  const activeTripIdsKey = trips
+    .filter(t => t.id && t.status !== "COMPLETED" && t.status !== "CANCELLED")
+    .map(t => t.id)
+    .sort()
+    .join(",");
+
   useEffect(() => {
-    if (!trips.length) return;
+    if (!activeTripIdsKey) return;
+    const tripIds = activeTripIdsKey.split(",");
     import("../lib/socket").then(({ joinTripRoom }) => {
-      trips.forEach((t) => {
-        if (t.id && t.status !== "COMPLETED" && t.status !== "CANCELLED") {
-          joinTripRoom(t.id);
-        }
+      tripIds.forEach((id) => {
+        if (id) joinTripRoom(id);
       });
     });
-  }, [trips]);
+  }, [activeTripIdsKey]);
 
   /* ── Live tracking via Socket.IO ── */
   useEffect(() => {
@@ -506,10 +510,10 @@ export default function EmployeeDashboard() {
         }
       });
       sock.on("negotiation:offer", () => {
-        loadOfferedRides();
+        loadOfferedRides(false);
       });
       sock.on("negotiation:accepted", () => {
-        loadOfferedRides();
+        loadOfferedRides(false);
       });
     };
     setupSocket();
