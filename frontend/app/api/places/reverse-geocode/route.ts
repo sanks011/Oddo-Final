@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// In-memory cache for reverse geocoding (24 hour TTL)
+const reverseGeocodeCache = new Map<string, { timestamp: number; formatted_address: string }>();
+const REVERSE_GEOCODE_TTL = 24 * 60 * 60 * 1000;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const lat = searchParams.get("lat");
@@ -7,6 +11,14 @@ export async function GET(req: NextRequest) {
 
   if (!lat || !lng) {
     return NextResponse.json({ formatted_address: "Current GPS Location" });
+  }
+
+  const cacheKey = `${parseFloat(lat).toFixed(4)},${parseFloat(lng).toFixed(4)}`;
+  const now = Date.now();
+
+  const cached = reverseGeocodeCache.get(cacheKey);
+  if (cached && now - cached.timestamp < REVERSE_GEOCODE_TTL) {
+    return NextResponse.json({ formatted_address: cached.formatted_address });
   }
 
   const apiKey =
@@ -26,20 +38,20 @@ export async function GET(req: NextRequest) {
     if (response.ok) {
       const data = await response.json();
       if (data && data.results && data.results[0]) {
-        return NextResponse.json({
-          formatted_address:
-            data.results[0].formatted_address ||
-            data.results[0].formattedAddress ||
-            data.results[0].placeName ||
-            `GPS Location (${lat}, ${lng})`,
-        });
+        const formatted_address =
+          data.results[0].formatted_address ||
+          data.results[0].formattedAddress ||
+          data.results[0].placeName ||
+          `GPS Location (${lat}, ${lng})`;
+        reverseGeocodeCache.set(cacheKey, { timestamp: now, formatted_address });
+        return NextResponse.json({ formatted_address });
       }
     }
   } catch {
     // Return default coordinate label
   }
 
-  return NextResponse.json({
-    formatted_address: `Current GPS Location (${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)})`,
-  });
+  const fallbackAddress = `Current GPS Location (${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)})`;
+  reverseGeocodeCache.set(cacheKey, { timestamp: now, formatted_address: fallbackAddress });
+  return NextResponse.json({ formatted_address: fallbackAddress });
 }

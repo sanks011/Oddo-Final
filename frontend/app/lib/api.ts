@@ -107,6 +107,45 @@ async function fetchApi<T>(
   return data as T;
 }
 
+/* ── Smart Client-Side In-Memory Cache ──────────────── */
+const clientApiCache = new Map<string, { timestamp: number; data: any }>();
+
+export function clearApiCache(endpointPrefix?: string) {
+  if (!endpointPrefix) {
+    clientApiCache.clear();
+    return;
+  }
+  for (const key of clientApiCache.keys()) {
+    if (key.includes(endpointPrefix)) {
+      clientApiCache.delete(key);
+    }
+  }
+}
+
+async function cachedFetchApi<T>(
+  endpoint: string,
+  ttlMs = 30000,
+  options: RequestInit = {}
+): Promise<T> {
+  const method = (options.method || "GET").toUpperCase();
+  if (method !== "GET") {
+    return fetchApi<T>(endpoint, options);
+  }
+
+  const token = getAccessToken() || "guest";
+  const cacheKey = `${token}:${endpoint}`;
+  const now = Date.now();
+
+  const cached = clientApiCache.get(cacheKey);
+  if (cached && now - cached.timestamp < ttlMs) {
+    return cached.data as T;
+  }
+
+  const fresh = await fetchApi<T>(endpoint, options);
+  clientApiCache.set(cacheKey, { timestamp: now, data: fresh });
+  return fresh;
+}
+
 /* ════════════════════════════════════════════════════
    MODULE 1 — AUTH
    ════════════════════════════════════════════════════ */
@@ -190,11 +229,11 @@ export interface OrgData {
 }
 
 export async function apiListPublicOrganizations(): Promise<Array<{ id: string; name: string; slug: string }>> {
-  return fetchApi<Array<{ id: string; name: string; slug: string }>>("/orgs/public");
+  return cachedFetchApi<Array<{ id: string; name: string; slug: string }>>("/orgs/public", 300000);
 }
 
 export async function apiListOrganizations(): Promise<OrgData[]> {
-  return fetchApi<OrgData[]>("/orgs");
+  return cachedFetchApi<OrgData[]>("/orgs", 60000);
 }
 
 export async function apiGetOrganization(orgId: string): Promise<OrgData> {
@@ -360,7 +399,7 @@ export interface VehicleData {
 
 export async function apiListVehicles(includeOrg = true): Promise<VehicleData[]> {
   const query = includeOrg ? "?all=true" : "";
-  return fetchApi<VehicleData[]>(`/vehicles${query}`);
+  return cachedFetchApi<VehicleData[]>(`/vehicles${query}`, 60000);
 }
 
 export async function apiGetPendingVehicles(): Promise<VehicleData[]> {
@@ -378,16 +417,19 @@ export async function apiCreateVehicle(formData: FormData): Promise<VehicleData>
   if (!res.ok) {
     throw new Error(data.message || "Failed to register vehicle");
   }
+  clearApiCache("/vehicles");
   return data;
 }
 
 export async function apiApproveVehicle(vehicleId: string): Promise<{ message: string; vehicle: VehicleData }> {
+  clearApiCache("/vehicles");
   return fetchApi<{ message: string; vehicle: VehicleData }>(`/vehicles/${vehicleId}/approve`, {
     method: "PATCH",
   });
 }
 
 export async function apiRejectVehicle(vehicleId: string, rejectionReason: string): Promise<{ message: string; vehicle: VehicleData }> {
+  clearApiCache("/vehicles");
   return fetchApi<{ message: string; vehicle: VehicleData }>(`/vehicles/${vehicleId}/reject`, {
     method: "PATCH",
     body: JSON.stringify({ rejectionReason }),
@@ -428,7 +470,7 @@ export interface SavedPlaceData {
 }
 
 export async function apiListSavedPlaces(): Promise<SavedPlaceData[]> {
-  return fetchApi<SavedPlaceData[]>("/settings/saved-places");
+  return cachedFetchApi<SavedPlaceData[]>("/settings/saved-places", 120000);
 }
 
 export async function apiCreateSavedPlace(payload: {
@@ -437,6 +479,7 @@ export async function apiCreateSavedPlace(payload: {
   latitude?: number;
   longitude?: number;
 }): Promise<SavedPlaceData> {
+  clearApiCache("/settings/saved-places");
   return fetchApi<SavedPlaceData>("/settings/saved-places", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -444,6 +487,7 @@ export async function apiCreateSavedPlace(payload: {
 }
 
 export async function apiDeleteSavedPlace(placeId: string) {
+  clearApiCache("/settings/saved-places");
   return fetchApi<{ message: string }>(`/settings/saved-places/${placeId}`, {
     method: "DELETE",
   });
@@ -671,7 +715,7 @@ export interface WalletData {
 }
 
 export async function apiGetWallet(): Promise<WalletData> {
-  return fetchApi<WalletData>("/wallet");
+  return cachedFetchApi<WalletData>("/wallet", 30000);
 }
 
 export async function apiRechargeWallet(amount: number) {
@@ -687,6 +731,7 @@ export async function apiVerifyRecharge(payload: {
   razorpay_signature: string;
   amount: number;
 }) {
+  clearApiCache("/wallet");
   return fetchApi<{ message: string; balance: number }>("/wallet/recharge/verify", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -697,6 +742,7 @@ export async function apiPayForTrip(
   tripId: string,
   method: "WALLET" | "CASH" | "CARD" | "UPI"
 ) {
+  clearApiCache("/wallet");
   return fetchApi<{
     message: string;
     paymentId?: string;
@@ -720,6 +766,7 @@ export async function apiVerifyTripPayment(
     amount?: number;
   }
 ) {
+  clearApiCache("/wallet");
   return fetchApi<{
     message: string;
     payment: { id: string; amount: number; status: string; method: string };

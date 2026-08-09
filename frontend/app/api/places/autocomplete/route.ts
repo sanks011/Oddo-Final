@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// In-memory cache for autocomplete queries (15-minute TTL)
+const autocompleteCache = new Map<string, { timestamp: number; predictions: any[] }>();
+const AUTOCOMPLETE_TTL = 15 * 60 * 1000;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const input = searchParams.get("input");
@@ -8,7 +12,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ predictions: [] });
   }
 
-  const query = input.trim();
+  const query = input.trim().toLowerCase();
+  const now = Date.now();
+
+  const cached = autocompleteCache.get(query);
+  if (cached && now - cached.timestamp < AUTOCOMPLETE_TTL) {
+    return NextResponse.json({ predictions: cached.predictions });
+  }
+
   const apiKey =
     process.env.MAPS_MY_INDIA_API_KEY ||
     process.env.NEXT_PUBLIC_MAPS_MY_INDIA_API_KEY ||
@@ -57,6 +68,7 @@ export async function GET(req: NextRequest) {
           };
         });
 
+        autocompleteCache.set(query, { timestamp: now, predictions: formatted });
         return NextResponse.json({ predictions: formatted });
       }
     }
@@ -91,6 +103,7 @@ export async function GET(req: NextRequest) {
           };
         });
 
+        autocompleteCache.set(query, { timestamp: now, predictions });
         return NextResponse.json({ predictions });
       }
     }
@@ -125,6 +138,7 @@ export async function GET(req: NextRequest) {
           };
         });
 
+        autocompleteCache.set(query, { timestamp: now, predictions });
         return NextResponse.json({ predictions });
       }
     }
