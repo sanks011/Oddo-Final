@@ -163,6 +163,14 @@ export default function EmployeeDashboard() {
   const [activePassengerBargains, setActivePassengerBargains] = useState<ActivePassengerBargain[]>([]);
   const [isRefreshingNeg, setIsRefreshingNeg] = useState(false);
   const [driverOtpInputs, setDriverOtpInputs] = useState<Record<string, string>>({});
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+
+  const startAction = (key: string) => setActionLoading(prev => ({ ...prev, [key]: true }));
+  const stopAction = (key: string) => setActionLoading(prev => {
+    const next = { ...prev };
+    delete next[key];
+    return next;
+  });
 
   const refreshNegotiationData = useCallback(async (rideId: string, showToastOnSuccess = false, showLoading = false) => {
     if (showLoading) setIsRefreshingNeg(true);
@@ -631,8 +639,10 @@ export default function EmployeeDashboard() {
 
   const handleSendOffer = async () => {
     if (!negotiating) return;
+    const actionKey = `send-offer:${negotiating.rideId}`;
+    startAction(actionKey);
     try {
-      const { apiStartNegotiation, apiCounterOffer, apiGetNegotiations } = await import("../lib/api");
+      const { apiStartNegotiation, apiCounterOffer } = await import("../lib/api");
       const { emitNegotiationOffer, joinRideRoom } = await import("../lib/socket");
       joinRideRoom(negotiating.rideId);
 
@@ -641,21 +651,10 @@ export default function EmployeeDashboard() {
 
       if (!activeNegId) {
         try {
-          const list = await apiGetNegotiations(negotiating.rideId);
-          if (Array.isArray(list) && list.length > 0) {
-            const openNeg = list.find((n: any) => n.status === "OPEN") || list[0];
-            if (openNeg && openNeg.status === "OPEN") {
-              activeNegId = openNeg.id;
-            }
-          }
-        } catch {}
-      }
-
-      if (!activeNegId) {
-        try {
           neg = await apiStartNegotiation(negotiating.rideId, bargainAmount);
         } catch (err: any) {
           if (err?.message?.includes("already exists") || err?.message?.includes("active negotiation")) {
+            const { apiGetNegotiations } = await import("../lib/api");
             const list = await apiGetNegotiations(negotiating.rideId);
             if (Array.isArray(list) && list.length > 0) {
               const openNeg = list.find((n: any) => n.status === "OPEN") || list[0];
@@ -676,7 +675,7 @@ export default function EmployeeDashboard() {
         ...prev, negotiationId: neg.id,
         currentOffer: bargainAmount, lastOfferedBy: "PASSENGER",
         status: "pending",
-        history: [...prev.history, { by: "You", amount: bargainAmount, time: new Date().toLocaleTimeString() }],
+        history: [{ by: "You", amount: bargainAmount, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }, ...prev.history],
       } : null);
 
       // Track bargain in Passenger's My Trips list
@@ -705,10 +704,12 @@ export default function EmployeeDashboard() {
         return [...prev, item];
       });
 
-      showToast("Offer sent to driver!", "success");
+      showToast("Offer sent to driver! 🚗", "success");
     } catch (err: any) {
       showToast(err?.message || "Could not send offer", "error");
       refreshNegotiationData(negotiating.rideId);
+    } finally {
+      stopAction(actionKey);
     }
   };
 
@@ -718,22 +719,32 @@ export default function EmployeeDashboard() {
       showToast("Cannot accept your own offer. Please wait for driver response.", "warning");
       return;
     }
+    const actionKey = `accept-neg:${negotiating.negotiationId}`;
+    startAction(actionKey);
     try {
-      const { apiAcceptNegotiation, apiSubmitJoinRequest } = await import("../lib/api");
+      const { apiAcceptNegotiation, apiSubmitJoinRequest, apiGetMyTrips } = await import("../lib/api");
       const { emitNegotiationAccept } = await import("../lib/socket");
-      await apiAcceptNegotiation(negotiating.rideId, negotiating.negotiationId);
-      emitNegotiationAccept(negotiating.rideId, negotiating.negotiationId, negotiating.currentOffer);
-      await apiSubmitJoinRequest(negotiating.rideId, { agreedFare: negotiating.currentOffer, seatsRequested: selectedSeats });
-      showToast(`Negotiation accepted at ₹${negotiating.currentOffer}! Join request sent.`, "success");
-      setActivePassengerBargains(prev => prev.filter(b => b.rideId !== negotiating.rideId));
+
+      const acceptedFare = negotiating.currentOffer;
+      const rideId = negotiating.rideId;
+      const negId = negotiating.negotiationId;
+
+      setActivePassengerBargains(prev => prev.filter(b => b.rideId !== rideId));
       setNegotiating(null);
       setActiveMainTab("my-trips");
-      const { apiGetMyTrips } = await import("../lib/api");
-      const fresh = await apiGetMyTrips();
-      setTrips(fresh.map(mapTrip));
+
+      await apiAcceptNegotiation(rideId, negId);
+      emitNegotiationAccept(rideId, negId, acceptedFare);
+      await apiSubmitJoinRequest(rideId, { agreedFare: acceptedFare, seatsRequested: selectedSeats });
+
+      showToast(`Negotiation accepted at ₹${acceptedFare}! Join request sent. 🎉`, "success");
+
+      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
     } catch (err: any) {
       showToast(err?.message || "Failed to accept negotiation", "error");
       refreshNegotiationData(negotiating.rideId);
+    } finally {
+      stopAction(actionKey);
     }
   };
 
@@ -743,6 +754,8 @@ export default function EmployeeDashboard() {
       showToast("Please enter a valid counter offer amount.", "warning");
       return;
     }
+    const actionKey = `driver-counter-neg:${negId}`;
+    startAction(actionKey);
     try {
       const { apiCounterOffer } = await import("../lib/api");
       const { emitNegotiationOffer } = await import("../lib/socket");
@@ -752,10 +765,14 @@ export default function EmployeeDashboard() {
       loadOfferedRides();
     } catch (err: any) {
       showToast(err?.message || "Could not send counter offer", "error");
+    } finally {
+      stopAction(actionKey);
     }
   };
 
   const handleDriverAcceptNegotiation = async (rideId: string, negId: string, agreedFare: number) => {
+    const actionKey = `driver-accept-neg:${negId}`;
+    startAction(actionKey);
     try {
       const { apiAcceptNegotiation } = await import("../lib/api");
       const { emitNegotiationAccept } = await import("../lib/socket");
@@ -765,10 +782,14 @@ export default function EmployeeDashboard() {
       loadOfferedRides();
     } catch (err: any) {
       showToast(err?.message || "Could not accept negotiation", "error");
+    } finally {
+      stopAction(actionKey);
     }
   };
 
   const handleDriverRejectNegotiation = async (rideId: string, negId: string) => {
+    const actionKey = `driver-reject-neg:${negId}`;
+    startAction(actionKey);
     try {
       const { apiRejectNegotiation } = await import("../lib/api");
       await apiRejectNegotiation(rideId, negId);
@@ -776,19 +797,24 @@ export default function EmployeeDashboard() {
       loadOfferedRides();
     } catch (err: any) {
       showToast(err?.message || "Could not reject negotiation", "error");
+    } finally {
+      stopAction(actionKey);
     }
   };
 
   const handleAcceptDriverJoinRequest = async (rideId: string, requestId: string) => {
+    const actionKey = `accept-join:${requestId}`;
+    startAction(actionKey);
     try {
       const { apiAcceptJoinRequest, apiGetMyTrips } = await import("../lib/api");
       await apiAcceptJoinRequest(rideId, requestId);
       showToast("Join request accepted! Trip created. 🎉", "success");
       loadOfferedRides();
-      const fresh = await apiGetMyTrips();
-      setTrips(fresh.map(mapTrip));
+      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
     } catch (err: any) {
       showToast(err?.message || "Could not accept join request", "error");
+    } finally {
+      stopAction(actionKey);
     }
   };
 
@@ -805,14 +831,18 @@ export default function EmployeeDashboard() {
 
   /* ── BOOK NOW (at listed price) ── */
   const handleBookNow = async (ride: AvailableRide) => {
+    const actionKey = `book:${ride.id}`;
+    startAction(actionKey);
     try {
       const { apiSubmitJoinRequest, apiGetMyTrips } = await import("../lib/api");
       await apiSubmitJoinRequest(ride.id, { agreedFare: ride.farePerSeat, seatsRequested: selectedSeats });
-      const fresh = await apiGetMyTrips();
-      setTrips(fresh.map(mapTrip));
       setActiveMainTab("my-trips");
+      showToast("Booking request sent! 🚗", "success");
+      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
     } catch (err: any) {
       setSearchError(err?.message || "Could not book ride. Driver may need to accept first.");
+    } finally {
+      stopAction(actionKey);
     }
   };
 
@@ -874,60 +904,88 @@ export default function EmployeeDashboard() {
   };
 
   /* ── OTP: Passenger verifies ── */
-  const handleVerifyOtp = async (trip: Trip) => {
-    if (!otpInput.trim()) { setOtpError("Enter the 4-digit OTP from your driver."); return; }
+  const handleVerifyOtp = async (trip: Trip, customOtp?: string) => {
+    const otpToUse = (customOtp || otpInput).trim();
+    if (!otpToUse) { setOtpError("Enter the 4-digit OTP from your driver."); return; }
+    const actionKey = `otp:${trip.id}`;
+    startAction(actionKey);
     setOtpLoading(true);
     setOtpError("");
+
+    // Optimistically update status
+    setTrips(prev => prev.map(t => t.id === trip.id ? { ...t, status: "IN_PROGRESS" as const } : t));
+
     try {
       const { apiVerifyOtp, apiGetMyTrips } = await import("../lib/api");
-      await apiVerifyOtp(trip.id, otpInput.trim());
+      await apiVerifyOtp(trip.id, otpToUse);
       setOtpInput("");
       setActiveOtpTrip(null);
       setTrackingTripId(trip.id);
-      const fresh = await apiGetMyTrips();
-      setTrips(fresh.map(mapTrip));
       showToast("OTP verified! Ride in progress. 🚗", "success");
+      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
     } catch (err: any) {
+      const { apiGetMyTrips } = await import("../lib/api");
+      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
       setOtpError(err?.message || "Invalid OTP");
     } finally {
       setOtpLoading(false);
+      stopAction(actionKey);
     }
   };
 
   /* ── OTP: Driver verifies passenger ── */
-  const handleDriverVerifyPassengerOtp = async (trip: Trip, passengerId?: string) => {
+  const handleDriverVerifyPassengerOtp = async (trip: Trip, passengerId?: string, overrideOtp?: string) => {
     const inputKey = passengerId ? `${trip.id}:${passengerId}` : trip.id;
-    const otpVal = driverOtpInputs[inputKey] || otpInput;
-    if (!otpVal || !otpVal.trim()) {
+    const otpVal = (overrideOtp || driverOtpInputs[inputKey] || otpInput).trim();
+    if (!otpVal) {
       showToast("Please enter the passenger's 4-digit boarding OTP.", "warning");
       return;
     }
+    const actionKey = `otp:${trip.id}:${passengerId || ""}`;
+    startAction(actionKey);
     setOtpLoading(true);
+
+    // Optimistically update status
+    setTrips(prev => prev.map(t => t.id === trip.id ? { ...t, status: "IN_PROGRESS" as const } : t));
+
     try {
       const { apiVerifyOtp, apiGetMyTrips } = await import("../lib/api");
-      await apiVerifyOtp(trip.id, otpVal.trim(), passengerId);
+      await apiVerifyOtp(trip.id, otpVal, passengerId);
       setDriverOtpInputs(prev => ({ ...prev, [inputKey]: "" }));
       setTrackingTripId(trip.id);
-      const fresh = await apiGetMyTrips();
-      setTrips(fresh.map(mapTrip));
       showToast("OTP verified! Ride has started! 🚗", "success");
+      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
     } catch (err: any) {
+      const { apiGetMyTrips } = await import("../lib/api");
+      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
       showToast(err?.message || "Invalid OTP", "error");
     } finally {
       setOtpLoading(false);
+      stopAction(actionKey);
     }
   };
 
   /* ── Driver: End Ride ── */
   const handleEndRide = async (trip: Trip) => {
+    const actionKey = `end:${trip.id}`;
+    startAction(actionKey);
+
+    // Optimistically update status
+    setTrips(prev => prev.map(t => t.id === trip.id ? { ...t, status: "COMPLETED" as const } : t));
+
     try {
       const { apiUpdateTripStatus, apiGetMyTrips } = await import("../lib/api");
       await apiUpdateTripStatus(trip.id, "COMPLETED");
       setTrackingTripId(null);
-      const fresh = await apiGetMyTrips();
-      setTrips(fresh.map(mapTrip));
       showToast("Ride completed! Fare collection panel is active below. 🏁", "success");
-    } catch (err: any) { showToast(err?.message || "Could not end ride", "error"); }
+      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
+    } catch (err: any) {
+      const { apiGetMyTrips } = await import("../lib/api");
+      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
+      showToast(err?.message || "Could not end ride", "error");
+    } finally {
+      stopAction(actionKey);
+    }
   };
 
   /* ── Driver: Mark Passenger Payment as Paid via Cash or Online ── */
@@ -1362,24 +1420,34 @@ export default function EmployeeDashboard() {
 
                         {(() => {
                           const isExpired = new Date(ride.departureTime).getTime() <= Date.now();
+                          const isBooking = actionLoading[`book:${ride.id}`];
                           return (
                             <div className="flex gap-3 pt-1">
                               <button
                                 onClick={() => handleBookNow(ride)}
-                                disabled={isExpired}
-                                className={`flex-1 py-2.5 rounded-xl font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] transition-all ${
-                                  isExpired
-                                    ? "bg-gray-200 text-gray-500 border-gray-400 cursor-not-allowed shadow-none"
+                                disabled={isExpired || isBooking}
+                                className={`flex-1 py-2.5 rounded-xl font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] transition-all flex items-center justify-center gap-2 ${
+                                  isExpired || isBooking
+                                    ? "bg-gray-200 text-gray-500 border-gray-400 cursor-not-allowed shadow-none opacity-80"
                                     : "bg-[#173300] text-[#FFEB5B] hover:translate-x-[1px] hover:translate-y-[1px]"
                                 }`}
                               >
-                                {isExpired ? "Departure Passed" : `Book Now ₹${ride.farePerSeat}`}
+                                {isBooking ? (
+                                  <>
+                                    <span className="inline-block w-4 h-4 border-2 border-[#FFEB5B] border-t-transparent rounded-full animate-spin" />
+                                    <span>Booking…</span>
+                                  </>
+                                ) : isExpired ? (
+                                  "Departure Passed"
+                                ) : (
+                                  `Book Now ₹${ride.farePerSeat}`
+                                )}
                               </button>
                               <button
                                 onClick={() => handleOpenBargain(ride)}
-                                disabled={isExpired}
+                                disabled={isExpired || isBooking}
                                 className={`flex-1 py-2.5 rounded-xl font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] transition-all ${
-                                  isExpired
+                                  isExpired || isBooking
                                     ? "bg-gray-200 text-gray-500 border-gray-400 cursor-not-allowed shadow-none"
                                     : "bg-[#FFEB5B] text-[#173300] hover:translate-x-[1px] hover:translate-y-[1px]"
                                 }`}
@@ -1591,9 +1659,17 @@ export default function EmployeeDashboard() {
                                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1 border-t border-dashed border-[#B6B6B6]">
                                         <button
                                           onClick={() => handleDriverAcceptNegotiation(ride.id, neg.id, latestOffer.amount)}
-                                          className="px-4 py-2 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[2px_2px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px]"
+                                          disabled={!!actionLoading[`driver-accept-neg:${neg.id}`]}
+                                          className="px-4 py-2 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[2px_2px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] flex items-center justify-center gap-1.5 disabled:opacity-50"
                                         >
-                                          Accept ₹{latestOffer.amount}
+                                          {actionLoading[`driver-accept-neg:${neg.id}`] ? (
+                                            <>
+                                              <span className="inline-block w-3 h-3 border-2 border-[#FFEB5B] border-t-transparent rounded-full animate-spin" />
+                                              <span>Accepting…</span>
+                                            </>
+                                          ) : (
+                                            `Accept ₹${latestOffer.amount}`
+                                          )}
                                         </button>
 
                                         <div className="flex flex-1 items-center gap-1.5">
@@ -1611,15 +1687,24 @@ export default function EmployeeDashboard() {
                                           />
                                           <button
                                             onClick={() => handleDriverCounterOffer(ride.id, neg.id)}
-                                            className="px-3 py-2 rounded-xl bg-[#FFEB5B] text-[#173300] font-bold text-xs border border-[#173300] hover:bg-[#FFEB5B]/80"
+                                            disabled={!!actionLoading[`driver-counter-neg:${neg.id}`]}
+                                            className="px-3 py-2 rounded-xl bg-[#FFEB5B] text-[#173300] font-bold text-xs border border-[#173300] hover:bg-[#FFEB5B]/80 flex items-center gap-1 disabled:opacity-50"
                                           >
-                                            Counter
+                                            {actionLoading[`driver-counter-neg:${neg.id}`] ? (
+                                              <>
+                                                <span className="inline-block w-3 h-3 border-2 border-[#173300] border-t-transparent rounded-full animate-spin" />
+                                                <span>Countering…</span>
+                                              </>
+                                            ) : (
+                                              "Counter"
+                                            )}
                                           </button>
                                         </div>
 
                                         <button
                                           onClick={() => handleDriverRejectNegotiation(ride.id, neg.id)}
-                                          className="px-3 py-2 rounded-xl border border-red-300 text-red-700 font-bold text-xs hover:bg-red-50"
+                                          disabled={!!actionLoading[`driver-reject-neg:${neg.id}`]}
+                                          className="px-3 py-2 rounded-xl border border-red-300 text-red-700 font-bold text-xs hover:bg-red-50 disabled:opacity-50"
                                         >
                                           Decline
                                         </button>
@@ -1667,9 +1752,17 @@ export default function EmployeeDashboard() {
                                       </button>
                                       <button
                                         onClick={() => handleAcceptDriverJoinRequest(ride.id, req.id)}
-                                        className="px-4 py-1.5 rounded-lg bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[2px_2px_0px_#173300]"
+                                        disabled={!!actionLoading[`accept-join:${req.id}`]}
+                                        className="px-4 py-1.5 rounded-lg bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[2px_2px_0px_#173300] flex items-center gap-1.5 disabled:opacity-50"
                                       >
-                                        Accept Request
+                                        {actionLoading[`accept-join:${req.id}`] ? (
+                                          <>
+                                            <span className="inline-block w-3 h-3 border-2 border-[#FFEB5B] border-t-transparent rounded-full animate-spin" />
+                                            <span>Accepting…</span>
+                                          </>
+                                        ) : (
+                                          "Accept Request"
+                                        )}
                                       </button>
                                     </div>
                                   </div>
@@ -1824,50 +1917,78 @@ export default function EmployeeDashboard() {
                     <div className="bg-[#173300]/[0.03] border-2 border-[#173300] rounded-2xl p-5 flex flex-col gap-4">
                       <div className="flex items-center justify-between">
                         <h4 className="font-heading text-base font-extrabold text-[#173300]">
-                          🔑 Passenger Boarding & OTP Verification
+                          🔑 Passenger Boarding &amp; OTP Verification
                         </h4>
                         <span className="text-[10px] font-mono font-bold bg-[#FFEB5B] border border-[#173300] text-[#173300] px-2.5 py-0.5 rounded-lg shadow-[1px_1px_0px_#173300]">
                           Ask Passenger for OTP
                         </span>
                       </div>
                       <div className="space-y-3">
-                        {(trip.passengersList && trip.passengersList.length > 0 ? trip.passengersList : [{ id: "", firstName: "Passenger", lastName: "", phone: "", seatsBooked: trip.seatsBooked, fareAmount: trip.fareAmount }]).map((p: any, idx: number) => (
-                          <div key={p.id || idx} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[2px_2px_0px_#173300]">
-                            <div>
-                              <div className="font-heading font-extrabold text-base text-[#173300]">
-                                {p.firstName} {p.lastName}
+                        {(trip.passengersList && trip.passengersList.length > 0 ? trip.passengersList : [{ id: "", firstName: "Passenger", lastName: "", phone: "", seatsBooked: trip.seatsBooked, fareAmount: trip.fareAmount }]).map((p: any, idx: number) => {
+                          const actionKey = `otp:${trip.id}:${p.id || ""}`;
+                          const isVerifying = !!actionLoading[actionKey];
+                          return (
+                            <div key={p.id || idx} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[2px_2px_0px_#173300]">
+                              <div>
+                                <div className="font-heading font-extrabold text-base text-[#173300]">
+                                  {p.firstName} {p.lastName}
+                                </div>
+                                <div className="text-xs font-mono text-[#173300]/70 mt-0.5">
+                                  {p.phone ? `Phone: ${p.phone} · ` : ""}{p.seatsBooked || 1} seat(s) · ₹{p.fareAmount || trip.fareAmount}
+                                </div>
                               </div>
-                              <div className="text-xs font-mono text-[#173300]/70 mt-0.5">
-                                {p.phone ? `Phone: ${p.phone} · ` : ""}{p.seatsBooked || 1} seat(s) · ₹{p.fareAmount || trip.fareAmount}
-                              </div>
+                              <form onSubmit={(e) => { e.preventDefault(); handleDriverVerifyPassengerOtp(trip, p.id); }} className="flex items-center gap-2 w-full sm:w-auto">
+                                <input
+                                  type="text"
+                                  maxLength={4}
+                                  placeholder="4-digit OTP"
+                                  value={driverOtpInputs[`${trip.id}:${p.id}`] || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+                                    setDriverOtpInputs(prev => ({ ...prev, [`${trip.id}:${p.id}`]: val }));
+                                    if (val.length === 4) {
+                                      handleDriverVerifyPassengerOtp(trip, p.id, val);
+                                    }
+                                  }}
+                                  className="w-32 px-3 py-2 rounded-xl border-2 border-[#173300] text-center font-mono font-bold text-sm bg-white focus:outline-none focus:bg-[#FFEB5B]/30"
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={otpLoading || isVerifying}
+                                  className="px-4 py-2 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300] hover:bg-[#173300]/90 disabled:opacity-50 whitespace-nowrap flex items-center gap-1.5"
+                                >
+                                  {isVerifying ? (
+                                    <>
+                                      <span className="inline-block w-3 h-3 border-2 border-[#FFEB5B] border-t-transparent rounded-full animate-spin" />
+                                      <span>Verifying…</span>
+                                    </>
+                                  ) : (
+                                    "Verify OTP & Start"
+                                  )}
+                                </button>
+                              </form>
                             </div>
-                            <form onSubmit={(e) => { e.preventDefault(); handleDriverVerifyPassengerOtp(trip, p.id); }} className="flex items-center gap-2 w-full sm:w-auto">
-                              <input
-                                type="text"
-                                maxLength={4}
-                                placeholder="4-digit OTP"
-                                value={driverOtpInputs[`${trip.id}:${p.id}`] || ""}
-                                onChange={(e) => setDriverOtpInputs(prev => ({ ...prev, [`${trip.id}:${p.id}`]: e.target.value }))}
-                                className="w-32 px-3 py-2 rounded-xl border-2 border-[#173300] text-center font-mono font-bold text-sm bg-white focus:outline-none focus:bg-[#FFEB5B]/30"
-                              />
-                              <button
-                                type="submit"
-                                disabled={otpLoading}
-                                className="px-4 py-2 rounded-xl bg-[#173300] text-[#FFEB5B] font-heading font-extrabold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300] hover:bg-[#173300]/90 disabled:opacity-50 whitespace-nowrap"
-                              >
-                                Verify OTP & Start
-                              </button>
-                            </form>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
                   {/* Driver: end ride */}
                   {trip.role === "DRIVER" && trip.status === "IN_PROGRESS" && (
-                    <button onClick={() => handleEndRide(trip)} className="w-full py-3.5 rounded-2xl bg-red-600 text-white font-heading font-extrabold text-base border-2 border-red-700 shadow-[4px_4px_0px_red] hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
-                      End Ride
+                    <button
+                      onClick={() => handleEndRide(trip)}
+                      disabled={!!actionLoading[`end:${trip.id}`]}
+                      className="w-full py-3.5 rounded-2xl bg-red-600 text-white font-heading font-extrabold text-base border-2 border-red-700 shadow-[4px_4px_0px_red] hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {actionLoading[`end:${trip.id}`] ? (
+                        <>
+                          <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Ending Ride…</span>
+                        </>
+                      ) : (
+                        "End Ride"
+                      )}
                     </button>
                   )}
 
@@ -2208,30 +2329,56 @@ export default function EmployeeDashboard() {
             )}
 
             <div className="flex gap-3">
-              <button
-                onClick={handleSendOffer}
-                disabled={negotiating.lastOfferedBy === "PASSENGER"}
-                className={`flex-1 py-3 rounded-xl font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] transition-all ${
-                  negotiating.lastOfferedBy === "PASSENGER"
-                    ? "bg-gray-200 text-gray-500 border-gray-400 cursor-not-allowed shadow-none"
-                    : "bg-[#173300] text-[#FFEB5B] hover:translate-x-[1px] hover:translate-y-[1px]"
-                }`}
-              >
-                {negotiating.lastOfferedBy === "PASSENGER" ? "Offer Sent (Waiting)" : `Send Offer ₹${bargainAmount}`}
-              </button>
-              {negotiating.negotiationId && negotiating.lastOfferedBy === "DRIVER" && (
-                <button
-                  onClick={handleAcceptNegotiation}
-                  className="flex-1 py-3 rounded-xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                >
-                  Accept & Book at ₹{negotiating.currentOffer}
-                </button>
-              )}
+              {(() => {
+                const isSending = !!actionLoading[`send-offer:${negotiating.rideId}`];
+                const isAccepting = !!actionLoading[`accept-neg:${negotiating.negotiationId}`];
+                return (
+                  <>
+                    <button
+                      onClick={handleSendOffer}
+                      disabled={negotiating.lastOfferedBy === "PASSENGER" || isSending || isAccepting}
+                      className={`flex-1 py-3 rounded-xl font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] transition-all flex items-center justify-center gap-1.5 ${
+                        negotiating.lastOfferedBy === "PASSENGER" || isSending || isAccepting
+                          ? "bg-gray-200 text-gray-500 border-gray-400 cursor-not-allowed shadow-none opacity-80"
+                          : "bg-[#173300] text-[#FFEB5B] hover:translate-x-[1px] hover:translate-y-[1px]"
+                      }`}
+                    >
+                      {isSending ? (
+                        <>
+                          <span className="inline-block w-4 h-4 border-2 border-[#FFEB5B] border-t-transparent rounded-full animate-spin" />
+                          <span>Sending…</span>
+                        </>
+                      ) : negotiating.lastOfferedBy === "PASSENGER" ? (
+                        "Offer Sent (Waiting)"
+                      ) : (
+                        `Send Offer ₹${bargainAmount}`
+                      )}
+                    </button>
+                    {negotiating.negotiationId && negotiating.lastOfferedBy === "DRIVER" && (
+                      <button
+                        onClick={handleAcceptNegotiation}
+                        disabled={isSending || isAccepting}
+                        className="flex-1 py-3 rounded-xl bg-[#FFEB5B] text-[#173300] font-heading font-extrabold text-sm border-2 border-[#173300] shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        {isAccepting ? (
+                          <>
+                            <span className="inline-block w-4 h-4 border-2 border-[#173300] border-t-transparent rounded-full animate-spin" />
+                            <span>Accepting…</span>
+                          </>
+                        ) : (
+                          `Accept & Book at ₹${negotiating.currentOffer}`
+                        )}
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
             </div>
             {negotiating.lastOfferedBy === "PASSENGER" && (
-              <p className="text-center font-mono text-xs text-[#173300]/70 italic mt-1">
-                Waiting for driver response to your offer of ₹{negotiating.currentOffer}...
-              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center font-mono text-xs text-blue-900 mt-1">
+                <span className="font-bold block mb-0.5">Step 2 of 3: Waiting for Driver</span>
+                Offer of ₹{negotiating.currentOffer} delivered in real-time. You will be notified instantly when driver responds.
+              </div>
             )}
           </div>
         </div>
