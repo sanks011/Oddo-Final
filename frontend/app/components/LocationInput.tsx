@@ -32,30 +32,49 @@ export default function LocationInput({
 }: LocationInputProps) {
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isSelectedRef = useRef<boolean>(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Debounced Ola Maps Autocomplete search
+  // Debounced Places Autocomplete search (350ms delay with AbortController)
   useEffect(() => {
     // If the value update was caused by selecting a suggestion, don't fetch or re-open
     if (isSelectedRef.current) {
       setIsOpen(false);
+      setIsSearching(false);
       return;
     }
 
-    if (!value || value.trim().length < 2) {
+    const trimmed = value?.trim() || "";
+    if (trimmed.length < 2) {
       setPredictions([]);
       setIsOpen(false);
+      setIsSearching(false);
       return;
     }
 
+    setIsSearching(true);
+
     const timer = setTimeout(async () => {
-      // Re-check in case user selected while timer was pending
-      if (isSelectedRef.current) return;
+      // Cancel previous pending fetch request if user typed again
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      if (isSelectedRef.current) {
+        setIsSearching(false);
+        return;
+      }
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       try {
-        const res = await fetch(`/api/places/autocomplete?input=${encodeURIComponent(value)}`);
+        const res = await fetch(`/api/places/autocomplete?input=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal,
+        });
         if (res.ok) {
           const data = await res.json();
           if (!isSelectedRef.current && data.predictions && data.predictions.length > 0) {
@@ -66,12 +85,23 @@ export default function LocationInput({
             setIsOpen(false);
           }
         }
-      } catch {
-        setPredictions([]);
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          setPredictions([]);
+        }
+      } finally {
+        if (abortControllerRef.current === controller) {
+          setIsSearching(false);
+        }
       }
-    }, 250);
+    }, 350);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [value]);
 
   // Close dropdown on outside click
@@ -172,6 +202,12 @@ export default function LocationInput({
           required={required}
           className="w-full pl-11 pr-10 py-3 rounded-xl border-b-2 border-t-0 border-x-0 border-[#173300] bg-[#FCFAF5] text-sm font-semibold text-[#173300] outline-none focus:border-b-4 transition-all"
         />
+
+        {isSearching && (
+          <div className="absolute right-3 flex items-center pointer-events-none">
+            <span className="w-4 h-4 border-2 border-[#173300] border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
       </div>
 
       {/* Ola Maps Autocomplete Dropdown List */}
