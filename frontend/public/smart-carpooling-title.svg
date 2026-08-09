@@ -1,6 +1,6 @@
 <svg width="390" height="44" viewBox="0 0 390 44" fill="none" xmlns="http://www.w3.org/2000/svg">
 
-  <!-- Yellow wobbly background — properly closed path covering full badge area -->
+  <!-- Yellow wobbly background - properly closed path covering full badge area -->
   <path d="
     M 6,3
     C 60,0.5 120,1.8 180,2.5
@@ -32,7 +32,7 @@
   <!-- Right star eye -->
   <polygon points="38,14 38.6,15.7 40.4,15.7 39,16.6 39.5,18.3 38,17.3 36.5,18.3 37,16.6 35.6,15.7 37.4,15.7" fill="#FFEB5B"/>
 
-  <!-- Text — centered in yellow area, light weight, small -->
+  <!-- Text - centered in yellow area, light weight, small -->
   <text
     x="228"
     y="27"

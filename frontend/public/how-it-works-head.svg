@@ -1,0 +1,16 @@
+<svg width="1321" height="120" viewBox="0 0 1321 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+<line y1="0.5" x2="1320.4" y2="0.5" stroke="#DD6C3E" stroke-dasharray="2 2"/>
+<!-- Simple text matching the scope head style -->
+<text
+  x="50%"
+  y="65"
+  text-anchor="middle"
+  font-family="'Bricolage Grotesque', 'Inter', sans-serif"
+  font-size="28"
+  font-weight="700"
+  letter-spacing="1.5"
+  fill="#DD6C3E"
+  style="text-transform: uppercase;"
+>HOW IT WORKS</text>
+<line y1="100.5" x2="1320.4" y2="100.5" stroke="#DD6C3E" stroke-dasharray="2 2"/>
+</svg>

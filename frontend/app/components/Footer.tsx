@@ -10,7 +10,7 @@ export default function Footer() {
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between border-b border-[#173300] pb-10">
           <div className="space-y-2">
             <h3 className="font-heading text-2xl sm:text-4xl font-extrabold text-[#173300]">
-              Stay in the loop with SayBriefly &amp; OddoStock.
+              Stay in the loop with Carpool.
             </h3>
             <p className="font-body text-base text-[#173300]/80">
               Get updates on new routes, fare negotiation features, and carpooling tips delivered straight to your inbox.
@@ -73,15 +73,15 @@ export default function Footer() {
 
         {/* Copyright Bar with Dashed Borders */}
         <p className="text-center py-5 border-y border-[#173300] border-dashed text-[#173300] text-base font-normal">
-          2026 © SayBriefly &amp; OddoStock. All rights reserved. <br className="block md:hidden" />
-          Designed by <span className="font-bold">@HustleJar</span>
+          2026 © Carpool. All rights reserved. <br className="block md:hidden" />
+          Designed by <a href="https://devdirect.com" target="_blank" rel="noreferrer" className="font-bold hover:underline">@devdirect</a>
         </p>
       </div>
 
       {/* Footer Artwork Image at the bottom */}
       <div className="w-full px-4 pt-4 pb-8">
         <img
-          src="/footer-artwork.png"
+          src="/footer.png"
           alt="Footer Artwork"
           width="2640"
           height="1460"

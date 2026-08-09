@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Simulating auth state — replace with real auth context later
+// Simulating auth state - replace with real auth context later
 const useAuth = () => {
   return { user: null as null | { name: string } };
 };
@@ -23,30 +23,19 @@ export default function Navbar() {
           {/* Logo & Brand Name */}
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2.5">
-              {/* Logo Mark — Yellow square with monogram */}
-              <div
-                className="w-10 h-10 rounded-md flex items-center justify-center shrink-0 select-none"
-                style={{ background: "#FFEB5B" }}
-                aria-label="Neko-ber logo"
-              >
-                <span
-                  className="text-[#173300] font-extrabold leading-none"
-                  style={{
-                    fontFamily: "var(--font-bricolage-grotesque)",
-                    fontSize: "15px",
-                    letterSpacing: "-0.02em",
-                  }}
-                >
-                  Nc
-                </span>
-              </div>
+              {/* Logo Image */}
+              <img
+                src="/logo.png"
+                alt="Carpool logo"
+                className="h-10 w-auto"
+              />
 
               {/* Brand Wordmark */}
               <span
                 className="text-[#173300] font-bold text-xl select-none tracking-tight"
                 style={{ fontFamily: "var(--font-inter)" }}
               >
-                Neko-ber
+                Carpool
               </span>
             </Link>
           </div>
