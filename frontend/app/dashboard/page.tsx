@@ -766,15 +766,13 @@ export default function EmployeeDashboard() {
       setActivePassengerBargains(prev => prev.filter(b => b.rideId !== rideId));
       setNegotiating(null);
 
-      if (negotiating.status !== "accepted") {
-        await apiAcceptNegotiation(rideId, negId);
-      }
-      await apiSubmitJoinRequest(rideId, { agreedFare: acceptedFare, seatsRequested: selectedSeats });
+      await apiAcceptNegotiation(rideId, negId);
 
       setActiveMainTab("my-trips");
-      showToast(`Negotiation accepted at ₹${acceptedFare}! Join request sent. 🎉`, "success");
+      showToast(`Negotiation accepted at ₹${acceptedFare}! Trip confirmed. 🎉`, "success");
 
-      apiGetMyTrips().then(fresh => setTrips(fresh.map(mapTrip))).catch(() => {});
+      const fresh = await apiGetMyTrips().catch(() => []);
+      setTrips(fresh.map(mapTrip));
     } catch (err: any) {
       showToast(err?.message || "Failed to accept negotiation", "error");
       refreshNegotiationData(negotiating.rideId);
@@ -807,8 +805,10 @@ export default function EmployeeDashboard() {
     startAction(actionKey);
     try {
       await apiAcceptNegotiation(rideId, negId);
-      showToast(`Accepted passenger's offer of ₹${agreedFare}!`, "success");
+      showToast(`Accepted passenger's offer of ₹${agreedFare}! Trip confirmed. 🎉`, "success");
       loadOfferedRides();
+      const fresh = await apiGetMyTrips().catch(() => []);
+      setTrips(fresh.map(mapTrip));
     } catch (err: any) {
       showToast(err?.message || "Could not accept negotiation", "error");
     } finally {
