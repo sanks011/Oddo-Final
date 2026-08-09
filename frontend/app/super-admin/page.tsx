@@ -107,6 +107,7 @@ export default function SuperAdminPage() {
 
   /* Search & Filter */
   const [search, setSearch] = useState("");
+  const [orgPage, setOrgPage] = useState(1);
 
   const mappedRealOrgs: typeof organizations = realOrgs.map((ro) => ({
     id: ro.id,
@@ -533,7 +534,7 @@ export default function SuperAdminPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredOrgs.map((org) => (
+                  filteredOrgs.slice((orgPage - 1) * 10, orgPage * 10).map((org) => (
                     <tr key={org.id} className="hover:bg-[#173300]/[0.02] transition-colors">
                       <td className="py-4 px-3 font-semibold text-[#173300]">
                         <div className="flex items-center gap-2.5">
@@ -618,6 +619,28 @@ export default function SuperAdminPage() {
               </tbody>
             </table>
           </div>
+
+          {filteredOrgs.length > 10 && (
+            <div className="flex items-center justify-between pt-4 border-t border-dashed border-[#B6B6B6] font-mono text-xs mt-4">
+              <button
+                onClick={() => setOrgPage((p) => Math.max(1, p - 1))}
+                disabled={orgPage <= 1}
+                className="px-3 py-1.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#FFEB5B] transition-colors"
+              >
+                ← Previous
+              </button>
+              <span className="font-bold text-[#173300]">
+                Page {orgPage} of {Math.ceil(filteredOrgs.length / 10)} ({filteredOrgs.length} Total)
+              </span>
+              <button
+                onClick={() => setOrgPage((p) => Math.min(Math.ceil(filteredOrgs.length / 10), p + 1))}
+                disabled={orgPage >= Math.ceil(filteredOrgs.length / 10)}
+                className="px-3 py-1.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#FFEB5B] transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       </main>
 

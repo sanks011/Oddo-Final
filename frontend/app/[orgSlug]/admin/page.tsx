@@ -13,6 +13,39 @@ type AdminTab =
   | "vehicles"
   | "carpool-config";
 
+function PaginationBar({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between pt-4 border-t border-dashed border-[#B6B6B6] font-mono text-xs w-full">
+      <button
+        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+        disabled={currentPage <= 1}
+        className="px-3 py-1.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#FFEB5B] transition-colors"
+      >
+        ← Previous
+      </button>
+      <span className="font-bold text-[#173300]">
+        Page {currentPage} of {totalPages}
+      </span>
+      <button
+        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage >= totalPages}
+        className="px-3 py-1.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#FFEB5B] transition-colors"
+      >
+        Next →
+      </button>
+    </div>
+  );
+}
+
 export default function OrgAdminDashboard({
   params,
 }: {
@@ -146,6 +179,9 @@ export default function OrgAdminDashboard({
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [empSearch, setEmpSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
+  const [empPage, setEmpPage] = useState(1);
+  const [vehPage, setVehPage] = useState(1);
+  const [pendingUserPage, setPendingUserPage] = useState(1);
 
   const carpoolEnabledCount = (orgEmps as any[]).filter((e) => e.carpoolAccess !== false).length;
   const totalEmployeesCount = orgEmps.length;
@@ -438,75 +474,82 @@ export default function OrgAdminDashboard({
                   No pending registration applications for {org.name}.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {pendingApps.map((app) => (
-                    <div
-                      key={app.id}
-                      className="border-2 border-[#173300] bg-[#FCFAF5] shadow-[4px_4px_0px_#173300] rounded-2xl p-5 flex flex-col justify-between gap-4 transition-all"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#173300]/50">
-                            {app.department || "General"}
-                          </span>
-                          <h3 className="font-heading text-xl font-extrabold text-[#173300]">
-                            {app.fullName || `${app.firstName || ""} ${app.lastName || ""}`.trim() || app.email}
-                          </h3>
-                          <div className="text-xs font-mono text-[#173300]/70 mt-0.5">
-                            ID: <span className="font-bold text-[#173300]">{app.employeeId || "N/A"}</span>
-                          </div>
-                          <div className="text-xs text-[#173300]/60 mt-0.5">
-                            {app.email}
-                          </div>
-                        </div>
-
-                        <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-full border bg-[#FFEB5B] text-[#173300] border-[#173300]">
-                          ● PENDING REVIEW
-                        </span>
-                      </div>
-
-                      {/* Uploaded ID Card Preview Thumbnail */}
-                      <div className="bg-[#173300]/[0.03] border-2 border-dashed border-[#B6B6B6] rounded-xl p-3 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-[#173300]/10 flex items-center justify-center font-mono font-bold text-xs text-[#173300]">
-                            ID
-                          </div>
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {pendingApps.slice((pendingUserPage - 1) * 6, pendingUserPage * 6).map((app) => (
+                      <div
+                        key={app.id}
+                        className="border-2 border-[#173300] bg-[#FCFAF5] shadow-[4px_4px_0px_#173300] rounded-2xl p-5 flex flex-col justify-between gap-4 transition-all"
+                      >
+                        <div className="flex justify-between items-start">
                           <div>
-                            <div className="text-xs font-semibold text-[#173300]">
-                              Uploaded Company ID Card
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#173300]/50">
+                              {app.department || "General"}
+                            </span>
+                            <h3 className="font-heading text-xl font-extrabold text-[#173300]">
+                              {app.fullName || `${app.firstName || ""} ${app.lastName || ""}`.trim() || app.email}
+                            </h3>
+                            <div className="text-xs font-mono text-[#173300]/70 mt-0.5">
+                              ID: <span className="font-bold text-[#173300]">{app.employeeId || "N/A"}</span>
                             </div>
-                            <div className="text-[10px] font-mono text-[#173300]/50">
-                              Submitted {app.idProofUploadedAt ? new Date(app.idProofUploadedAt).toLocaleDateString() : "Recently"}
+                            <div className="text-xs text-[#173300]/60 mt-0.5">
+                              {app.email}
                             </div>
                           </div>
-                        </div>
-                        <a
-                          href={getIdProofUrl(app.id)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1 bg-[#173300] text-[#FFEB5B] text-[11px] font-mono font-bold rounded-md hover:opacity-90 inline-block"
-                        >
-                          Inspect ID Card
-                        </a>
-                      </div>
 
-                      {/* Action buttons */}
-                      <div className="flex gap-3 pt-2">
-                        <button
-                          onClick={() => handleRejectUser(app.id)}
-                          className="flex-1 py-2.5 rounded-xl border-2 border-dashed border-red-300 text-red-700 font-bold text-xs hover:bg-red-50 transition-colors"
-                        >
-                          Reject Application
-                        </button>
-                        <button
-                          onClick={() => handleApproveUser(app.id)}
-                          className="flex-2 py-2.5 rounded-xl border-2 border-[#173300] bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                        >
-                          Grant Employee Access
-                        </button>
+                          <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-full border bg-[#FFEB5B] text-[#173300] border-[#173300]">
+                            ● PENDING REVIEW
+                          </span>
+                        </div>
+
+                        {/* Uploaded ID Card Preview Thumbnail */}
+                        <div className="bg-[#173300]/[0.03] border-2 border-dashed border-[#B6B6B6] rounded-xl p-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-[#173300]/10 flex items-center justify-center font-mono font-bold text-xs text-[#173300]">
+                              ID
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-[#173300]">
+                                Uploaded Company ID Card
+                              </div>
+                              <div className="text-[10px] font-mono text-[#173300]/50">
+                                Submitted {app.idProofUploadedAt ? new Date(app.idProofUploadedAt).toLocaleDateString() : "Recently"}
+                              </div>
+                            </div>
+                          </div>
+                          <a
+                            href={getIdProofUrl(app.id)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1 bg-[#173300] text-[#FFEB5B] text-[11px] font-mono font-bold rounded-md hover:opacity-90 inline-block"
+                          >
+                            Inspect ID Card
+                          </a>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            onClick={() => handleRejectUser(app.id)}
+                            className="flex-1 py-2.5 rounded-xl border-2 border-dashed border-red-300 text-red-700 font-bold text-xs hover:bg-red-50 transition-colors"
+                          >
+                            Reject Application
+                          </button>
+                          <button
+                            onClick={() => handleApproveUser(app.id)}
+                            className="flex-2 py-2.5 rounded-xl border-2 border-[#173300] bg-[#173300] text-[#FFEB5B] font-bold text-xs shadow-[3px_3px_0px_#173300] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                          >
+                            Grant Employee Access
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  <PaginationBar
+                    currentPage={pendingUserPage}
+                    totalPages={Math.ceil(pendingApps.length / 6)}
+                    onPageChange={setPendingUserPage}
+                  />
                 </div>
               )}
             </div>
@@ -572,7 +615,7 @@ export default function OrgAdminDashboard({
                         </td>
                       </tr>
                     ) : (
-                      filteredEmployees.map((emp) => {
+                      filteredEmployees.slice((empPage - 1) * 10, empPage * 10).map((emp) => {
                         const empName = emp.name || `${(emp as UserData).firstName || ""} ${(emp as UserData).lastName || ""}`.trim() || emp.email;
                         const empDept = emp.department || "General";
                         const empStatus = emp.status || ((emp as UserData).verificationStatus === "APPROVED" ? "Active" : (emp as UserData).verificationStatus || "Active");
@@ -630,6 +673,12 @@ export default function OrgAdminDashboard({
                   </tbody>
                 </table>
               </div>
+
+              <PaginationBar
+                currentPage={empPage}
+                totalPages={Math.ceil(filteredEmployees.length / 10)}
+                onPageChange={setEmpPage}
+              />
             </div>
           </div>
         )}
@@ -747,64 +796,71 @@ export default function OrgAdminDashboard({
                   No registered vehicles found for {org.name} yet.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {orgVehs.map((veh) => {
-                    const ownerName = veh.owner
-                      ? `${veh.owner.firstName || ""} ${veh.owner.lastName || ""}`.trim()
-                      : "Registered Driver";
-                    return (
-                      <div
-                        key={veh.id}
-                        className="border-2 border-[#173300] bg-[#FCFAF5] rounded-2xl p-5 shadow-[4px_4px_0px_#173300] flex flex-col justify-between gap-4"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">
-                              {veh.fuelType}
-                            </span>
-                            <h3 className="font-heading text-lg font-extrabold text-[#173300] mt-2">
-                              {veh.model}
-                            </h3>
-                            <div className="text-xs font-mono font-bold text-[#173300]/80 mt-0.5">
-                              Plate: {veh.registrationNumber}
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {orgVehs.slice((vehPage - 1) * 9, vehPage * 9).map((veh) => {
+                      const ownerName = veh.owner
+                        ? `${veh.owner.firstName || ""} ${veh.owner.lastName || ""}`.trim()
+                        : "Registered Driver";
+                      return (
+                        <div
+                          key={veh.id}
+                          className="border-2 border-[#173300] bg-[#FCFAF5] rounded-2xl p-5 shadow-[4px_4px_0px_#173300] flex flex-col justify-between gap-4"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-[#FFEB5B] border border-[#173300] rounded-md">
+                                {veh.fuelType}
+                              </span>
+                              <h3 className="font-heading text-lg font-extrabold text-[#173300] mt-2">
+                                {veh.model}
+                              </h3>
+                              <div className="text-xs font-mono font-bold text-[#173300]/80 mt-0.5">
+                                Plate: {veh.registrationNumber}
+                              </div>
+                              <div className="text-xs text-[#173300]/70 font-mono mt-1">
+                                Driver: <span className="font-bold">{ownerName}</span>
+                              </div>
                             </div>
-                            <div className="text-xs text-[#173300]/70 font-mono mt-1">
-                              Driver: <span className="font-bold">{ownerName}</span>
-                            </div>
-                          </div>
 
-                          <span
-                            className={`text-[10px] font-mono font-bold px-2 py-1 rounded-lg border ${
-                              veh.status === "VERIFIED"
-                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                : veh.status === "REJECTED"
-                                ? "bg-red-100 text-red-800 border-red-300"
-                                : "bg-amber-100 text-amber-800 border-amber-300"
-                            }`}
-                          >
-                            {veh.status}
-                          </span>
-                        </div>
-
-                        <div className="bg-[#173300]/[0.03] border border-dashed border-[#B6B6B6] rounded-xl p-3 font-mono text-xs flex justify-between items-center">
-                          <div>
-                            <span className="text-[#173300]/60 block text-[10px]">SEATING CAPACITY</span>
-                            <span className="font-bold text-[#173300]">{veh.seatingCapacity} Seats</span>
-                          </div>
-                          {veh.licensePath && (
-                            <a
-                              href={`${API_BASE_URL}/vehicles/${veh.id}/license?token=${encodeURIComponent(typeof window !== 'undefined' && localStorage.getItem('oddo_access_token') || '')}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[11px] font-bold text-[#173300] underline"
+                            <span
+                              className={`text-[10px] font-mono font-bold px-2 py-1 rounded-lg border ${
+                                veh.status === "VERIFIED"
+                                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                  : veh.status === "REJECTED"
+                                  ? "bg-red-100 text-red-800 border-red-300"
+                                  : "bg-amber-100 text-amber-800 border-amber-300"
+                              }`}
                             >
-                              Inspect License
-                            </a>
-                          )}
+                              {veh.status}
+                            </span>
+                          </div>
+
+                          <div className="bg-[#173300]/[0.03] border border-dashed border-[#B6B6B6] rounded-xl p-3 font-mono text-xs flex justify-between items-center">
+                            <div>
+                              <span className="text-[#173300]/60 block text-[10px]">SEATING CAPACITY</span>
+                              <span className="font-bold text-[#173300]">{veh.seatingCapacity} Seats</span>
+                            </div>
+                            {veh.licensePath && (
+                              <a
+                                href={`${API_BASE_URL}/vehicles/${veh.id}/license?token=${encodeURIComponent(typeof window !== 'undefined' && localStorage.getItem('oddo_access_token') || '')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[11px] font-bold text-[#173300] underline"
+                              >
+                                Inspect License
+                              </a>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                  <PaginationBar
+                    currentPage={vehPage}
+                    totalPages={Math.ceil(orgVehs.length / 9)}
+                    onPageChange={setVehPage}
+                  />
                 </div>
               )}
             </div>

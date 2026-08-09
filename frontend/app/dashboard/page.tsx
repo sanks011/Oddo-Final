@@ -66,6 +66,39 @@ const SkeletonCard = () => (
   </div>
 );
 
+function PaginationBar({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between pt-4 border-t border-dashed border-[#B6B6B6] font-mono text-xs w-full">
+      <button
+        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+        disabled={currentPage <= 1}
+        className="px-3 py-1.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#FFEB5B] transition-colors"
+      >
+        ← Previous
+      </button>
+      <span className="font-bold text-[#173300]">
+        Page {currentPage} of {totalPages}
+      </span>
+      <button
+        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage >= totalPages}
+        className="px-3 py-1.5 rounded-xl border-2 border-[#173300] bg-[#FCFAF5] font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#FFEB5B] transition-colors"
+      >
+        Next →
+      </button>
+    </div>
+  );
+}
+
 /* ── Types ─────────────────────────────────────────── */
 type MainTab = "carpooling" | "my-trips" | "my-vehicle" | "ride-history" | "wallet" | "setting";
 type FindRideStep = "search" | "route-confirm" | "available-rides";
@@ -164,6 +197,14 @@ export default function EmployeeDashboard() {
   const [rideHistory, setRideHistory] = useState<Trip[]>([]);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [walletTransactions, setWalletTransactions] = useState<Array<{ id: string; type: string; amount: number; description: string; createdAt: string }>>([]);
+
+  /* Pagination States */
+  const [availableRidesPage, setAvailableRidesPage] = useState(1);
+  const [offeredRidesPage, setOfferedRidesPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [walletTxPage, setWalletTxPage] = useState(1);
+  const [placesPage, setPlacesPage] = useState(1);
 
   /* Search Loading */
   const [searchLoading, setSearchLoading] = useState(false);
@@ -376,6 +417,15 @@ export default function EmployeeDashboard() {
   };
 
   /* ── Load backend data on mount ── */
+  const fetchHistoryPage = async (targetPage: number) => {
+    try {
+      const histData = await apiGetTripHistory(targetPage, 10);
+      setRideHistory(histData.trips.map(mapTrip));
+      setHistoryPage(targetPage);
+      setHistoryTotalPages(Math.ceil((histData.total || 0) / 10) || 1);
+    } catch {}
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -385,7 +435,7 @@ export default function EmployeeDashboard() {
           apiGetMyTrips(),
           apiGetWallet(),
           apiListSavedPlaces(),
-          apiGetTripHistory(1, 30),
+          apiGetTripHistory(1, 10),
         ]);
 
         if (vehData.status === "fulfilled" && vehData.value.length > 0) {
@@ -408,6 +458,7 @@ export default function EmployeeDashboard() {
         }
         if (histData.status === "fulfilled") {
           setRideHistory(histData.value.trips.map(mapTrip));
+          setHistoryTotalPages(Math.ceil((histData.value.total || 0) / 10) || 1);
         }
         if (walletData.status === "fulfilled") {
           setWalletBalance(walletData.value.balance);
@@ -1514,7 +1565,7 @@ export default function EmployeeDashboard() {
                       </div>
                     )}
 
-                    {!searchLoading && availableRides.map((ride, rideIdx) => (
+                    {!searchLoading && availableRides.slice((availableRidesPage - 1) * 6, availableRidesPage * 6).map((ride, rideIdx) => (
                       <div key={`avail-ride-${ride.id}-${rideIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300] flex flex-col gap-4">
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-4">
@@ -1589,6 +1640,14 @@ export default function EmployeeDashboard() {
                         })()}
                       </div>
                     ))}
+
+                    {!searchLoading && availableRides.length > 0 && (
+                      <PaginationBar
+                        currentPage={availableRidesPage}
+                        totalPages={Math.ceil(availableRides.length / 6)}
+                        onPageChange={setAvailableRidesPage}
+                      />
+                    )}
                   </div>
                 )}
               </>
@@ -1715,7 +1774,7 @@ export default function EmployeeDashboard() {
                 </div>
 
                 <div className="space-y-6">
-                  {offeredRides.map((ride, rideIdx) => {
+                  {offeredRides.slice((offeredRidesPage - 1) * 5, offeredRidesPage * 5).map((ride, rideIdx) => {
                     const activeNegs = ride.negotiations || [];
                     const pendingReqs = ride.joinRequests || [];
                     return (
@@ -1910,6 +1969,11 @@ export default function EmployeeDashboard() {
                       </div>
                     );
                   })}
+                  <PaginationBar
+                    currentPage={offeredRidesPage}
+                    totalPages={Math.ceil(offeredRides.length / 5)}
+                    onPageChange={setOfferedRidesPage}
+                  />
                 </div>
               </div>
             )}
@@ -2334,6 +2398,11 @@ export default function EmployeeDashboard() {
                     </div>
                   </div>
                 ))}
+                <PaginationBar
+                  currentPage={historyPage}
+                  totalPages={historyTotalPages}
+                  onPageChange={fetchHistoryPage}
+                />
               </div>
             )}
           </div>
@@ -2356,7 +2425,7 @@ export default function EmployeeDashboard() {
               <div className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-6 shadow-[6px_6px_0px_#173300]">
                 <h3 className="font-heading font-extrabold text-lg text-[#173300] mb-4">Recent Transactions</h3>
                 <div className="space-y-3">
-                  {walletTransactions.slice(0, 10).map((tx, txIdx) => (
+                  {walletTransactions.slice((walletTxPage - 1) * 8, walletTxPage * 8).map((tx, txIdx) => (
                     <div key={`w-tx-${tx.id}-${txIdx}`} className="flex justify-between items-center py-2 border-b border-dashed border-[#B6B6B6] last:border-0">
                       <div>
                         <div className="font-semibold text-sm text-[#173300]">{tx.description}</div>
@@ -2368,6 +2437,11 @@ export default function EmployeeDashboard() {
                     </div>
                   ))}
                 </div>
+                <PaginationBar
+                  currentPage={walletTxPage}
+                  totalPages={Math.ceil(walletTransactions.length / 8)}
+                  onPageChange={setWalletTxPage}
+                />
               </div>
             )}
           </div>
@@ -2386,13 +2460,20 @@ export default function EmployeeDashboard() {
                 <button onClick={() => setIsAddPlaceOpen(true)} className="mt-4 px-6 py-2 rounded-xl bg-[#173300] text-[#FFEB5B] font-bold text-xs border-2 border-[#173300] shadow-[2px_2px_0px_#173300]">Add Your First Place</button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {savedPlaces.map((sp, spIdx) => (
-                  <div key={`sp-${sp.id}-${spIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-5 shadow-[5px_5px_0px_#173300]">
-                    <h3 className="font-heading text-lg font-extrabold text-[#173300]">{sp.label}</h3>
-                    <p className="text-xs font-mono text-[#173300]/70 mt-1">{sp.address}</p>
-                  </div>
-                ))}
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {savedPlaces.slice((placesPage - 1) * 6, placesPage * 6).map((sp, spIdx) => (
+                    <div key={`sp-${sp.id}-${spIdx}`} className="bg-[#FCFAF5] border-2 border-[#173300] rounded-3xl p-5 shadow-[5px_5px_0px_#173300]">
+                      <h3 className="font-heading text-lg font-extrabold text-[#173300]">{sp.label}</h3>
+                      <p className="text-xs font-mono text-[#173300]/70 mt-1">{sp.address}</p>
+                    </div>
+                  ))}
+                </div>
+                <PaginationBar
+                  currentPage={placesPage}
+                  totalPages={Math.ceil(savedPlaces.length / 6)}
+                  onPageChange={setPlacesPage}
+                />
               </div>
             )}
           </div>
